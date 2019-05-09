@@ -1,8 +1,7 @@
 import * as ts_module from 'typescript/lib/tsserverlibrary';
-import { listen, MessageConnector } from './server';
-import { createLanguageService } from './fileHandler';
-// import { activate } from './extension';
-// import { typescript } from './utils/languageModeIds';
+import { listen } from './server';
+import { startLanguageService } from './fileHandler';
+import { Socket } from 'net';
 const VETUR_PORT = process.env.VETUR_PORT ? +process.env.VETUR_PORT : 83887;
 function init({ typescript: ts }: { typescript: typeof ts_module }) {
   return { create };
@@ -15,8 +14,8 @@ function init({ typescript: ts }: { typescript: typeof ts_module }) {
     const project = info.project;
     listen(
       VETUR_PORT,
-      function(connector: MessageConnector) {
-        createLanguageService(connector, project, serverHost);
+      function onConnect(connector: Socket) {
+        startLanguageService(connector, project, serverHost, info.languageService);
       },
       function onError(err: any) {
         project.projectService.logger.msg(toString(err), ts.server.Msg.Err);

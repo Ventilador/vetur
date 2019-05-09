@@ -2,14 +2,16 @@
     "extends": "../tsconfig.options.json",
     "compilerOptions": {
         "composite": true,
-        "outDir": "../dist",
+        "outDir": "../dist/vetur-tsserver-plugin",
         "lib": [
             "es2015",
             "es2016.array.include"
         ],
+        "experimentalDecorators": true,
         "strictPropertyInitialization": false,
     },
     "include": [
-        "**/*.ts"
+        "**/*.ts",
+        "../shared/**/*.ts"
     ]
 }

@@ -3,6 +3,24 @@
     "target": "es6",
     "module": "commonjs",
     "strict": true,
-    "sourceMap": true
-  }
+    "sourceMap": true,
+    "baseUrl": "./",
+    "rootDir": "./",
+    "paths": {
+      "@/shared/*": [
+        "./shared/*"
+      ]
+    },
+    "typeRoots": [
+      "./typings",
+      "@types"
+    ],
+    "types": [
+      "node",
+      "mocha"
+    ]
+  },
+  "files": [
+    "typings/index.d.ts"
+  ]
 }

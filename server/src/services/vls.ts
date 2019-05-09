@@ -33,7 +33,8 @@ import {
   TextDocumentChangeEvent,
   TextEdit,
   ColorPresentation,
-  Range
+  Range,
+  Command
 } from 'vscode-languageserver-types';
 
 import Uri from 'vscode-uri';
@@ -45,6 +46,7 @@ import * as _ from 'lodash';
 import { DocumentContext, RefactorAction } from '../types';
 import { DocumentService } from './documentService';
 import { VueHTMLMode } from '../modes/template';
+import { HandlerResult } from 'vscode-jsonrpc';
 
 export class VLS {
   // @Todo: Remove this and DocumentContext
@@ -267,7 +269,7 @@ export class VLS {
     };
   }
 
-  onCompletion({ textDocument, position }: TextDocumentPositionParams): CompletionList {
+  onCompletion({ textDocument, position }: TextDocumentPositionParams): HandlerResult<CompletionList, any> {
     const doc = this.documentService.getDocument(textDocument.uri)!;
     const mode = this.languageModes.getModeAtPosition(doc, position);
     if (mode && mode.doComplete) {
@@ -277,7 +279,7 @@ export class VLS {
     return NULL_COMPLETION;
   }
 
-  onCompletionResolve(item: CompletionItem): CompletionItem {
+  onCompletionResolve(item: CompletionItem): HandlerResult<CompletionItem, any> {
     if (item.data) {
       const { uri, languageId } = item.data;
       if (uri && languageId) {
@@ -292,7 +294,7 @@ export class VLS {
     return item;
   }
 
-  onHover({ textDocument, position }: TextDocumentPositionParams): Hover {
+  onHover({ textDocument, position }: TextDocumentPositionParams): HandlerResult<Hover, any> {
     const doc = this.documentService.getDocument(textDocument.uri)!;
     const mode = this.languageModes.getModeAtPosition(doc, position);
     if (mode && mode.doHover) {
@@ -301,7 +303,7 @@ export class VLS {
     return NULL_HOVER;
   }
 
-  onDocumentHighlight({ textDocument, position }: TextDocumentPositionParams): DocumentHighlight[] {
+  onDocumentHighlight({ textDocument, position }: TextDocumentPositionParams): HandlerResult<DocumentHighlight[], any> {
     const doc = this.documentService.getDocument(textDocument.uri)!;
     const mode = this.languageModes.getModeAtPosition(doc, position);
     if (mode && mode.findDocumentHighlight) {
@@ -310,7 +312,7 @@ export class VLS {
     return [];
   }
 
-  onDefinition({ textDocument, position }: TextDocumentPositionParams): Definition {
+  onDefinition({ textDocument, position }: TextDocumentPositionParams): HandlerResult<Definition, any> {
     const doc = this.documentService.getDocument(textDocument.uri)!;
     const mode = this.languageModes.getModeAtPosition(doc, position);
     if (mode && mode.findDefinition) {
@@ -319,7 +321,7 @@ export class VLS {
     return [];
   }
 
-  onReferences({ textDocument, position }: TextDocumentPositionParams): Location[] {
+  onReferences({ textDocument, position }: TextDocumentPositionParams): HandlerResult<Location[], any> {
     const doc = this.documentService.getDocument(textDocument.uri)!;
     const mode = this.languageModes.getModeAtPosition(doc, position);
     if (mode && mode.findReferences) {
@@ -328,7 +330,7 @@ export class VLS {
     return [];
   }
 
-  onDocumentLinks({ textDocument }: DocumentLinkParams): DocumentLink[] {
+  async onDocumentLinks({ textDocument }: DocumentLinkParams): Promise<DocumentLink[]> {
     const doc = this.documentService.getDocument(textDocument.uri)!;
     const documentContext: DocumentContext = {
       resolveReference: ref => {
@@ -345,28 +347,28 @@ export class VLS {
       }
     };
 
-    const links: DocumentLink[] = [];
-    this.languageModes.getAllLanguageModeRangesInDocument(doc).forEach(m => {
+    const links: HandlerResult<DocumentLink[], any> = [];
+    for (const m of this.languageModes.getAllLanguageModeRangesInDocument(doc)) {
       if (m.mode.findDocumentLinks) {
-        pushAll(links, m.mode.findDocumentLinks(doc, documentContext));
+        pushAll(links, (await m.mode.findDocumentLinks(doc, documentContext)) as DocumentLink[]);
       }
-    });
+    }
     return links;
   }
 
-  onDocumentSymbol({ textDocument }: DocumentSymbolParams): SymbolInformation[] {
+  async onDocumentSymbol({ textDocument }: DocumentSymbolParams): Promise<SymbolInformation[]> {
     const doc = this.documentService.getDocument(textDocument.uri)!;
     const symbols: SymbolInformation[] = [];
 
-    this.languageModes.getAllLanguageModeRangesInDocument(doc).forEach(m => {
+    for (const m of this.languageModes.getAllLanguageModeRangesInDocument(doc)) {
       if (m.mode.findDocumentSymbols) {
-        pushAll(symbols, m.mode.findDocumentSymbols(doc));
+        pushAll(symbols, await m.mode.findDocumentSymbols(doc));
       }
-    });
+    }
     return symbols;
   }
 
-  onDocumentColors({ textDocument }: DocumentColorParams): ColorInformation[] {
+  async onDocumentColors({ textDocument }: DocumentColorParams): Promise<ColorInformation[]> {
     const doc = this.documentService.getDocument(textDocument.uri)!;
     const colors: ColorInformation[] = [];
 
@@ -377,14 +379,18 @@ export class VLS {
 
     for (const mode of distinctModes) {
       if (mode.findDocumentColors) {
-        pushAll(colors, mode.findDocumentColors(doc));
+        pushAll(colors, await mode.findDocumentColors(doc));
       }
     }
 
     return colors;
   }
 
-  onColorPresentations({ textDocument, color, range }: ColorPresentationParams): ColorPresentation[] {
+  onColorPresentations({
+    textDocument,
+    color,
+    range
+  }: ColorPresentationParams): HandlerResult<ColorPresentation[], any> {
     const doc = this.documentService.getDocument(textDocument.uri)!;
     const mode = this.languageModes.getModeAtPosition(doc, range.start);
     if (mode && mode.getColorPresentations) {
@@ -393,7 +399,7 @@ export class VLS {
     return [];
   }
 
-  onSignatureHelp({ textDocument, position }: TextDocumentPositionParams): SignatureHelp | null {
+  onSignatureHelp({ textDocument, position }: TextDocumentPositionParams): HandlerResult<SignatureHelp | null, any> {
     const doc = this.documentService.getDocument(textDocument.uri)!;
     const mode = this.languageModes.getModeAtPosition(doc, position);
     if (mode && mode.doSignatureHelp) {
@@ -402,7 +408,7 @@ export class VLS {
     return NULL_SIGNATURE;
   }
 
-  onCodeAction({ textDocument, range, context }: CodeActionParams) {
+  onCodeAction({ textDocument, range, context }: CodeActionParams): HandlerResult<Command[], any> {
     const doc = this.documentService.getDocument(textDocument.uri)!;
     const mode = this.languageModes.getModeAtPosition(doc, range.start);
     if (this.languageModes.getModeAtPosition(doc, range.end) !== mode) {
@@ -414,7 +420,7 @@ export class VLS {
     return [];
   }
 
-  getRefactorEdits(refactorAction: RefactorAction) {
+  getRefactorEdits(refactorAction: RefactorAction): HandlerResult<Command | undefined, any> {
     const uri = Uri.file(refactorAction.fileName).toString();
     const doc = this.documentService.getDocument(uri)!;
     const startPos = doc.positionAt(refactorAction.textRange.pos);
@@ -441,12 +447,12 @@ export class VLS {
     }
   }
 
-  validateTextDocument(textDocument: TextDocument): void {
-    const diagnostics: Diagnostic[] = this.doValidate(textDocument);
+  async validateTextDocument(textDocument: TextDocument): Promise<void> {
+    const diagnostics = (await this.doValidate(textDocument)) as Diagnostic[];
     this.lspConnection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
   }
 
-  doValidate(doc: TextDocument): Diagnostic[] {
+  doValidate(doc: TextDocument): HandlerResult<Diagnostic[], any> {
     const diagnostics: Diagnostic[] = [];
     if (doc.languageId === 'vue') {
       this.languageModes.getAllLanguageModeRangesInDocument(doc).forEach(lmr => {

@@ -20,6 +20,7 @@ import {
   ColorPresentation,
   Command
 } from 'vscode-languageserver-types';
+import { HandlerResult } from 'vscode-jsonrpc';
 
 import { getLanguageModelCache, LanguageModelCache } from './languageModelCache';
 import { getVueDocumentRegions, VueDocumentRegions, LanguageId, LanguageRange } from './embeddedSupport';
@@ -50,20 +51,23 @@ export interface LanguageMode {
     range: Range,
     formatParams: FormattingOptions,
     context: CodeActionContext
-  ): Command[];
-  getRefactorEdits?(doc: TextDocument, args: RefactorAction): Command;
-  doComplete?(document: TextDocument, position: Position): CompletionList;
-  doResolve?(document: TextDocument, item: CompletionItem): CompletionItem;
-  doHover?(document: TextDocument, position: Position): Hover;
-  doSignatureHelp?(document: TextDocument, position: Position): SignatureHelp | null;
-  findDocumentHighlight?(document: TextDocument, position: Position): DocumentHighlight[];
-  findDocumentSymbols?(document: TextDocument): SymbolInformation[];
-  findDocumentLinks?(document: TextDocument, documentContext: DocumentContext): DocumentLink[];
-  findDefinition?(document: TextDocument, position: Position): Definition;
-  findReferences?(document: TextDocument, position: Position): Location[];
+  ): HandlerResult<Command[], any>;
+  getRefactorEdits?(doc: TextDocument, args: RefactorAction): HandlerResult<Command | undefined, any>;
+  doComplete?(document: TextDocument, position: Position): HandlerResult<CompletionList, any>;
+  doResolve?(document: TextDocument, item: CompletionItem): HandlerResult<CompletionItem, any>;
+  doHover?(document: TextDocument, position: Position): HandlerResult<Hover, any>;
+  doSignatureHelp?(document: TextDocument, position: Position): HandlerResult<SignatureHelp | null, any>;
+  findDocumentHighlight?(document: TextDocument, position: Position): HandlerResult<DocumentHighlight[], any>;
+  findDocumentSymbols?(document: TextDocument): Promise<SymbolInformation[]> | SymbolInformation[];
+  findDocumentLinks?(
+    document: TextDocument,
+    documentContext: DocumentContext
+  ): Promise<DocumentLink[]> | DocumentLink[];
+  findDefinition?(document: TextDocument, position: Position): HandlerResult<Definition, any>;
+  findReferences?(document: TextDocument, position: Position): HandlerResult<Location[], any>;
   format?(document: TextDocument, range: Range, options: FormattingOptions): TextEdit[];
-  findDocumentColors?(document: TextDocument): ColorInformation[];
-  getColorPresentations?(document: TextDocument, color: Color, range: Range): ColorPresentation[];
+  findDocumentColors?(document: TextDocument): Promise<ColorInformation[]> | ColorInformation[];
+  getColorPresentations?(document: TextDocument, color: Color, range: Range): HandlerResult<ColorPresentation[], any>;
 
   onDocumentChanged?(filePath: string): void;
   onDocumentRemoved(document: TextDocument): void;

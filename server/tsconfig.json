@@ -3,13 +3,16 @@
   "compilerOptions": {
     "composite": true,
     "outDir": "./dist",
-    "rootDir": "src",
-
-    "lib": ["es2015", "es2016.array.include"],
+    "experimentalDecorators": true,
+    "lib": [
+      "es2015",
+      "es2016.array.include"
+    ],
     // Most classes in VLS are asynchronously initialized
     "strictPropertyInitialization": false
   },
   "include": [
-    "src"
-  ]
+    "src", "shared"
+  ],
+  "exclude": ["node_modules"]
 }

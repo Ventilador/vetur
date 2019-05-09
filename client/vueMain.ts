@@ -44,7 +44,7 @@ export async function activate(context: vscode.ExtensionContext) {
    * Vue Language Server Initialization
    */
 
-  const serverModule = context.asAbsolutePath(join('server', 'dist', 'vueServerMain.js'));
+  const serverModule = context.asAbsolutePath(join('server', 'dist', 'server', 'src', 'vueServerMain.js'));
   const client = initializeLanguageClient(serverModule);
   context.subscriptions.push(client.start());
 
