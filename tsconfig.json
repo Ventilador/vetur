@@ -4,7 +4,6 @@
     { "path": "scripts" },
     { "path": "client" },
     { "path": "server" },
-    { "path": "vetur-tsserver-plugin" },
     { "path": "test" }
   ]
 }

@@ -4,23 +4,10 @@
     "module": "commonjs",
     "strict": true,
     "sourceMap": true,
-    "baseUrl": "./",
-    "rootDir": "./",
-    "paths": {
-      "@/shared/*": [
-        "./shared/*"
-      ]
-    },
-    "typeRoots": [
-      "./typings",
-      "@types"
-    ],
+    "noEmitOnError": true,
     "types": [
       "node",
       "mocha"
     ]
-  },
-  "files": [
-    "typings/index.d.ts"
-  ]
+  }
 }

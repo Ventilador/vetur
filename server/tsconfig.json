@@ -12,7 +12,7 @@
     "strictPropertyInitialization": false
   },
   "include": [
-    "src", "shared"
+    "src"
   ],
   "exclude": ["node_modules"]
 }
