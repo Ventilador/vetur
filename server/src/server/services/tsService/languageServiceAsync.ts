@@ -1,37 +1,48 @@
-import { Socket } from 'net';
-import { TextDocument } from 'vscode-languageserver';
+import { Socket, createConnection } from 'net';
+import { TextDocument, IConnection } from 'vscode-languageserver';
 import { TextSpan } from 'typescript/lib/tsserverlibrary';
-import { MessageConnector } from '../../../shared/classes';
-import { ToMove } from '../../../shared/decorators/reviver';
+import { MessageConnector, LanguageServiceAsync } from '../../../shared/classes';
+import { ToMove, Method } from '../../../shared/decorators/reviver';
 import { Thru } from '../../../shared/serialization/thru';
 import { F64 } from '../../../shared/serialization/f64';
 import { Doc } from '../../../shared/serialization/document';
 import { FullJson } from '../../../shared/serialization/json';
 import { ArrayOf } from '../../../shared/serialization/arrayOf';
-
-export function createLanguageService(socket: Socket, onError: (err: any) => any) {
-  return new AsyncLanguageService(socket, onError);
+const VETUR_PORT = process.env.VETUR_PORT ? +process.env.VETUR_PORT : 64278;
+export function createLanguageService() {
+  return new AsyncLanguageService(createConnection({ port: VETUR_PORT, host: 'localhost' }), console.error);
 }
-class AsyncLanguageService {
+class AsyncLanguageService implements LanguageServiceAsync {
   bus: MessageConnector;
   constructor(socket: Socket, onError: (err: any) => any) {
     this.bus = new MessageConnector(socket, onError);
   }
+  @Method
+  getId() {
+    return 'typescript';
+  }
+
+  @Method
   dispose(): void {
     this.bus.dispose();
   }
-  updateFile(@ToMove(Doc) doc: TextDocument): void {
-    this.bus.request('updateFile', [doc]);
+
+  @Method
+  updateFile(@ToMove(Doc) doc: TextDocument): Promise<void> {
+    return this.bus.request('updateFile', [doc]);
   }
 
+  @Method
   getDiagnosticWithLocation(@ToMove(Thru) fileName: string): Promise<ts.DiagnosticWithLocation[]> {
     return this.bus.request<ts.DiagnosticWithLocation[]>('getDiagnosticWithLocation', [fileName]);
   }
 
-  onDocumentRemoved(@ToMove(Thru) fileName: string): void {
-    this.bus.request('delete', [fileName]);
+  @Method
+  onDocumentRemoved(doc: TextDocument): Promise<void> {
+    return this.bus.request('delete', [doc.uri]);
   }
 
+  @Method
   getCompletionsAtPosition(
     @ToMove(Thru) fileName: string,
     @ToMove(F64) offset: number
@@ -39,6 +50,7 @@ class AsyncLanguageService {
     return this.bus.request<ts.WithMetadata<ts.CompletionInfo>>('getCompletionsAtPosition', [fileName, offset]);
   }
 
+  @Method
   getCompletionEntryDetails(
     @ToMove(Thru) fileName: string,
     @ToMove(F64) offset: number,
@@ -53,6 +65,7 @@ class AsyncLanguageService {
     ]);
   }
 
+  @Method
   getQuickInfoAtPosition(
     @ToMove(Thru) fileName: string,
     @ToMove(F64) offset: number
@@ -60,6 +73,7 @@ class AsyncLanguageService {
     return this.bus.request<ts.QuickInfo | undefined>('getQuickInfoAtPosition', [fileName, offset]);
   }
 
+  @Method
   getSignatureHelpItems(
     @ToMove(Thru) fileName: string,
     @ToMove(F64) offset: number
@@ -67,6 +81,7 @@ class AsyncLanguageService {
     return this.bus.request<ts.SignatureHelpItems | undefined>('getSignatureHelpItems', [fileName, offset]);
   }
 
+  @Method
   getOccurrencesAtPosition(
     @ToMove(Thru) fileName: string,
     @ToMove(F64) offset: number
@@ -74,22 +89,28 @@ class AsyncLanguageService {
     return this.bus.request<ts.ReferenceEntry[] | undefined>('getOccurrencesAtPosition', [fileName, offset]);
   }
 
+  @Method
   getNavigationBarItems(@ToMove(Thru) fileName: string, @ToMove(F64) offset: number): Promise<ts.NavigationBarItem[]> {
     return this.bus.request<ts.NavigationBarItem[]>('getNavigationBarItems', [fileName, offset]);
   }
 
+  @Method
   getDefinitionAtPosition(
     @ToMove(Thru) fileName: string,
     @ToMove(F64) offset: number
   ): Promise<{ fileName: string; textSpan: TextSpan }[]> {
     return this.bus.request<{ fileName: string; textSpan: TextSpan }[]>('getDefinitionAtPosition', [fileName, offset]);
   }
+
+  @Method
   getReferencesAtPosition(
     @ToMove(Thru) fileName: string,
     @ToMove(F64) offset: number
   ): Promise<ts.ReferenceEntry[] | undefined> {
     return this.bus.request<ts.ReferenceEntry[] | undefined>('getReferencesAtPosition', [fileName, offset]);
   }
+
+  @Method
   getCodeFixesAtPosition(
     @ToMove(Thru) fileName: string,
     @ToMove(F64) start: number,
@@ -109,6 +130,8 @@ class AsyncLanguageService {
       fixableDiagnosticCodes
     ]);
   }
+
+  @Method
   getApplicableRefactors(
     @ToMove(Thru) fileName: string,
     @ToMove(F64) pos: number,
@@ -116,9 +139,13 @@ class AsyncLanguageService {
   ): Promise<ts.ApplicableRefactorInfo[]> {
     return this.bus.request<ts.ApplicableRefactorInfo[]>('getReferencesAtPosition', [fileName, pos, end]);
   }
+
+  @Method
   getEditsForRefactor(@ToMove(FullJson) args: any): Promise<ts.RefactorEditInfo | undefined> {
     return this.bus.request<ts.RefactorEditInfo | undefined>('getReferencesAtPosition', [args]);
   }
+
+  @Method
   getFormattingEditsForRange(
     @ToMove(Thru) fileName: string,
     @ToMove(F64) start: number,

@@ -2,7 +2,7 @@ import * as ts_module from 'typescript/lib/tsserverlibrary';
 import { listen } from './server';
 import { startLanguageService } from './fileHandler';
 import { Socket } from 'net';
-const VETUR_PORT = process.env.VETUR_PORT ? +process.env.VETUR_PORT : 83887;
+const VETUR_PORT = process.env.VETUR_PORT ? +process.env.VETUR_PORT : 64278;
 function init({ typescript: ts }: { typescript: typeof ts_module }) {
   return { create };
 

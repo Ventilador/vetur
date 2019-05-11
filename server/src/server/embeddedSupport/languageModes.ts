@@ -34,6 +34,8 @@ import { VueInfoService } from '../services/vueInfoService';
 import { DependencyService, State } from '../services/dependencyService';
 import { nullMode } from '../modes/nullMode';
 import { getServiceHost, IServiceHost } from '../services/typescriptService/serviceHost';
+import { createLanguageService } from '../services/tsService/languageServiceAsync';
+import { IConnection } from 'vscode-languageserver';
 export interface VLSServices {
   infoService?: VueInfoService;
   dependencyService?: DependencyService;
@@ -42,9 +44,9 @@ export interface VLSServices {
 export interface LanguageMode {
   getId(): string;
   configure?(options: any): void;
-  updateFileInfo?(doc: TextDocument): void;
+  updateFileInfo?(doc: TextDocument): Promise<void> | void;
 
-  doValidation?(document: TextDocument): Diagnostic[];
+  doValidation?(document: TextDocument): Promise<Diagnostic[]> | Diagnostic[];
   getCodeActions?(
     document: TextDocument,
     range: Range,
@@ -68,8 +70,8 @@ export interface LanguageMode {
   findDocumentColors?(document: TextDocument): Promise<ColorInformation[]> | ColorInformation[];
   getColorPresentations?(document: TextDocument, color: Color, range: Range): HandlerResult<ColorPresentation[], any>;
 
-  onDocumentChanged?(filePath: string): void;
-  onDocumentRemoved(document: TextDocument): void;
+  onDocumentChanged?(filePath: string): HandlerResult<void, any>;
+  onDocumentRemoved(document: TextDocument): Promise<void> | void;
   dispose(): void;
 }
 
@@ -127,13 +129,7 @@ export class LanguageModes {
       workspacePath,
       services.infoService
     );
-    const jsMode = await getJavascriptMode(
-      this.serviceHost,
-      this.documentRegions,
-      workspacePath,
-      services.infoService,
-      services.dependencyService
-    );
+    const jsMode = createLanguageService();
 
     this.modes['vue'] = getVueMode();
     this.modes['vue-html'] = vueHtmlMode;

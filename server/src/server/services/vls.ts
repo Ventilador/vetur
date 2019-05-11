@@ -452,14 +452,14 @@ export class VLS {
     this.lspConnection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
   }
 
-  doValidate(doc: TextDocument): HandlerResult<Diagnostic[], any> {
+  async doValidate(doc: TextDocument): Promise<Diagnostic[]> {
     const diagnostics: Diagnostic[] = [];
     if (doc.languageId === 'vue') {
-      this.languageModes.getAllLanguageModeRangesInDocument(doc).forEach(lmr => {
+      for (const lmr of this.languageModes.getAllLanguageModeRangesInDocument(doc)) {
         if (lmr.mode.doValidation && this.validation[lmr.mode.getId()]) {
-          pushAll(diagnostics, lmr.mode.doValidation(doc));
+          pushAll(diagnostics, await lmr.mode.doValidation(doc));
         }
-      });
+      }
     }
     return diagnostics;
   }

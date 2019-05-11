@@ -4,8 +4,9 @@
 build/
 docs/
 client/
+server/
+scripts/
 **/test/
-server/src/
 
 .**
 
