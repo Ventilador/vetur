@@ -26,7 +26,7 @@ import { getLanguageModelCache, LanguageModelCache } from './languageModelCache'
 import { getVueDocumentRegions, VueDocumentRegions, LanguageId, LanguageRange } from './embeddedSupport';
 import { getVueMode } from '../modes/vue';
 import { getCSSMode, getSCSSMode, getLESSMode, getPostCSSMode } from '../modes/style';
-import { getJavascriptMode } from '../modes/script/javascript';
+import { getJavascriptMode } from '../modes/script/tsLanguageMode';
 import { VueHTMLMode } from '../modes/template';
 import { getStylusMode } from '../modes/style/stylus';
 import { DocumentContext, RefactorAction } from '../types';
@@ -36,6 +36,7 @@ import { nullMode } from '../modes/nullMode';
 import { getServiceHost, IServiceHost } from '../services/typescriptService/serviceHost';
 import { createLanguageService } from '../services/tsService/languageServiceAsync';
 import { IConnection } from 'vscode-languageserver';
+import { DocumentService } from '../services/documentService';
 export interface VLSServices {
   infoService?: VueInfoService;
   dependencyService?: DependencyService;
@@ -66,7 +67,7 @@ export interface LanguageMode {
   ): Promise<DocumentLink[]> | DocumentLink[];
   findDefinition?(document: TextDocument, position: Position): HandlerResult<Definition, any>;
   findReferences?(document: TextDocument, position: Position): HandlerResult<Location[], any>;
-  format?(document: TextDocument, range: Range, options: FormattingOptions): TextEdit[];
+  format?(document: TextDocument, range: Range, options: FormattingOptions): Promise<TextEdit[]> | TextEdit[];
   findDocumentColors?(document: TextDocument): Promise<ColorInformation[]> | ColorInformation[];
   getColorPresentations?(document: TextDocument, color: Color, range: Range): HandlerResult<ColorPresentation[], any>;
 
@@ -98,7 +99,7 @@ export class LanguageModes {
   private modelCaches: LanguageModelCache<any>[];
   private serviceHost: IServiceHost;
 
-  constructor() {
+  constructor(private docService: DocumentService) {
     this.documentRegions = getLanguageModelCache<VueDocumentRegions>(10, 60, document =>
       getVueDocumentRegions(document)
     );

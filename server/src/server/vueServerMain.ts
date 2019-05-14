@@ -7,6 +7,7 @@ console.log = connection.console.log.bind(connection.console);
 console.error = connection.console.error.bind(connection.console);
 
 const vls = new VLS(connection);
+connection.sendRequest
 connection.onInitialize(
   async (params: InitializeParams): Promise<InitializeResult> => {
     await vls.init(params);

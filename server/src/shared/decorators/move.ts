@@ -2,6 +2,10 @@ import { ISerializer } from '../serialization/types';
 import { Reader } from '../parser';
 import { getToken, AllConstructors } from './serializersSingleton';
 
+const AllConstructorsVar = 'a';
+const readerArg = 'b';
+const valueArg = 'c';
+const stringifyFn = 'd';
 const keys = Symbol('isReady');
 export function Move(): (proto: any) => any;
 export function Move(ctor: ISerializer<any>): (proto: any, name: string) => void;
@@ -28,43 +32,44 @@ interface IItem {
 
 function createParser(props: IItem[]) {
   return new Function(
-    'AllConstructors',
+    AllConstructorsVar,
     `
-return function(reader){
-    var ${props.map((_, i) => `n${i}=reader.collectNumber();`).join('\r\n\t')}
+return function(${readerArg}){
     return {
         ${props
-          .map((prop, i) => {
-            return `${prop.name}: v${i}.parse(reader.sliceNext(n${i}))`;
-          })
-          .join(',\r\n\t\t')}
+      .map((prop, i) => {
+        return `${prop.name}: ${AllConstructorsVar}.${getToken(prop.ctor)}.parse(${readerArg}.sliceNext(${readerArg}.collectNumber()))`;
+      })
+      .join(',\r\n\t\t')}
     };
 }`
   )(AllConstructors) as (val: Reader) => any;
 }
 
+function stringifyHelper<T>(serializer: ISerializer<T>, val: T) {
+  const valText = serializer.stringify(val);
+  return `${valText.length}|${valText}`;
+}
+
 function createSerializer(arg: IItem[]) {
-  const declareContent = `var content = [${arg.map(toValueDotProp).map(wrapWithAllConstructors, arg)}].join('|');`;
   return new Function(
-    'AllConstructors',
+    AllConstructorsVar,
+    stringifyFn,
     `
-return function (value) {
-    ${declareContent}
-    return content.length + '|' + content;
+return function (${valueArg}) {
+  return [
+    ${arg.map(generateStringifyCode).join(',\r\n    ')}
+  ].join('');
 };`
-  )(AllConstructors) as (val: string) => any;
+  )(AllConstructors, stringifyHelper) as (val: string) => any;
 }
-function wrapWithAllConstructors(this: IItem[], valueDotProp: string, index: number) {
-  return `AllConstructors.${getToken(this[index].ctor)}(${valueDotProp})`;
+
+function generateStringifyCode(prop: IItem) {
+  return `${stringifyFn}(${AllConstructorsVar}.${getToken(prop.ctor)}, ${toValueDotProp(prop)})`;
 }
+
 function toValueDotProp(item: IItem) {
-  return 'value.' + item.name;
-}
-function toCtor(item: any) {
-  return item.ctor;
-}
-function createTokens(args: any[]) {
-  return args.map((_, i) => 'v' + i);
+  return `${valueArg}.${item.name}`;
 }
 
 function byName(a: any, b: any) {

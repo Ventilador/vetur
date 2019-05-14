@@ -1,233 +1,57 @@
 import { Socket } from 'net';
-import { MessageConnector } from '../shared/classes';
-import * as ts from 'typescript/lib/tsserverlibrary';
+import { MessageConnector, AsyncLanguageService } from '../shared/classes';
+import { displayPartsToString, flattenDiagnosticMessageText, getSupportedCodeFixes, server, ScriptKind } from 'typescript/lib/tsserverlibrary';
 import { ServerHost } from './serverHost';
-import { Bool } from '../shared/serialization/bool';
-import { F64 } from '../shared/serialization/f64';
-import { Thru } from '../shared/serialization/thru';
-import { ArrayOf } from '../shared/serialization/arrayOf';
-import { FullJson } from '../shared/serialization/json';
-import { Doc } from '../shared/serialization/document';
-import { TextDocument } from 'vscode-languageserver';
-import { Reviver } from '../shared/decorators';
-import { DefinitionInfo } from 'typescript';
-const { server, ScriptKind } = ts;
+import {
+  TextDocument, Diagnostic, DiagnosticTag, Range, DiagnosticSeverity,
+  Position, CompletionList, TextEdit, CompletionItemKind, CompletionItem,
+  MarkupContent, Hover, MarkedString, SignatureHelp, SignatureInformation,
+  ParameterInformation, DocumentHighlight, DocumentHighlightKind, SymbolInformation,
+  Definition, Location, FormattingOptions, CodeActionContext, Command, SymbolKind
+} from 'vscode-languageserver';
+import { Uri } from 'vscode';
+import { IMetadataItem, argWrapper } from '../shared/decorators/reviver';
+import { getFileFsPath } from '../server/utils/paths';
+import { LanguageModelCache } from '../server/embeddedSupport/languageModelCache';
+import { LanguageRange } from '../server/embeddedSupport/embeddedSupport';
+import { NULL_SIGNATURE } from '../server/modes/nullMode';
+import { RefactorAction } from '../server/types';
+import { VLSFormatConfig } from '../server/config';
+import { prettierify, prettierEslintify } from '../server/utils/prettier';
 
-export class Handler implements ts.LanguageService {
-  public connector: MessageConnector;
+
+let supportedCodeFixCodes: Set<any> | undefined;
+// Todo: After upgrading to LS server 4.0, use CompletionContext for filtering trigger chars
+// https://microsoft.github.io/language-server-protocol/specification#completion-request-leftwards_arrow_with_hook
+const NON_SCRIPT_TRIGGERS = ['<', '/', '*', ':'];
+export class Handler extends AsyncLanguageService {
+  private config: any;
+
   constructor(
     _socket: Socket,
     private _languageService: ts.LanguageService,
+    private _firstScriptRegion: LanguageModelCache<LanguageRange | undefined>,
     private _project: ts.server.Project,
     private _host: ServerHost
   ) {
-    this.connector = new MessageConnector(_socket, null as any);
+    super(_socket, console.error);
+    AsyncLanguageService.METADATA.forEach((m) => {
+      this.bus$.onRequest(m.name, (this as any)[m.name]);
+    })
   }
 
-  cleanupSemanticCache(): void {
-    throw new Error('Method not implemented.');
+  public dispose(): void {
+    this.bus$.dispose();
+  }
+  protected initWrapper(metadata: IMetadataItem): Function {
+    const self = this;
+    const method = (this as any)[metadata.name] as Function;
+    return argWrapper(metadata.transforms, function () {
+      return metadata.returns.stringify(method.apply(self, arguments));
+    }, 'parse');
   }
 
-  getSyntacticDiagnostics(fileName: string): ts.DiagnosticWithLocation[] {
-    throw new Error('Method not implemented.');
-  }
-
-  getSemanticDiagnostics(fileName: string): ts.Diagnostic[] {
-    throw new Error('Method not implemented.');
-  }
-
-  getSuggestionDiagnostics(fileName: string): ts.DiagnosticWithLocation[] {
-    throw new Error('Method not implemented.');
-  }
-
-  getCompilerOptionsDiagnostics(): ts.Diagnostic[] {
-    throw new Error('Method not implemented.');
-  }
-
-  getSyntacticClassifications(fileName: string, span: ts.TextSpan): ts.ClassifiedSpan[] {
-    throw new Error('Method not implemented.');
-  }
-
-  getSemanticClassifications(fileName: string, span: ts.TextSpan): ts.ClassifiedSpan[] {
-    throw new Error('Method not implemented.');
-  }
-
-  getEncodedSyntacticClassifications(fileName: string, span: ts.TextSpan): ts.Classifications {
-    throw new Error('Method not implemented.');
-  }
-
-  getEncodedSemanticClassifications(fileName: string, span: ts.TextSpan): ts.Classifications {
-    throw new Error('Method not implemented.');
-  }
-
-  getCompletionEntrySymbol(
-    fileName: string,
-    position: number,
-    name: string,
-    source: string | undefined
-  ): ts.Symbol | undefined {
-    throw new Error('Method not implemented.');
-  }
-
-  getNameOrDottedNameSpan(fileName: string, startPos: number, endPos: number): ts.TextSpan | undefined {
-    throw new Error('Method not implemented.');
-  }
-
-  getBreakpointStatementAtPosition(fileName: string, position: number): ts.TextSpan | undefined {
-    throw new Error('Method not implemented.');
-  }
-
-  getRenameInfo(fileName: string, position: number, options?: ts.RenameInfoOptions | undefined): ts.RenameInfo {
-    throw new Error('Method not implemented.');
-  }
-
-  findRenameLocations(
-    fileName: string,
-    position: number,
-    findInStrings: boolean,
-    findInComments: boolean,
-    providePrefixAndSuffixTextForRename?: boolean | undefined
-  ): readonly ts.RenameLocation[] | undefined {
-    throw new Error('Method not implemented.');
-  }
-
-  getDefinitionAndBoundSpan(fileName: string, position: number): ts.DefinitionInfoAndBoundSpan | undefined {
-    throw new Error('Method not implemented.');
-  }
-
-  getTypeDefinitionAtPosition(fileName: string, position: number): readonly ts.DefinitionInfo[] | undefined {
-    throw new Error('Method not implemented.');
-  }
-
-  getImplementationAtPosition(fileName: string, position: number): readonly ts.ImplementationLocation[] | undefined {
-    throw new Error('Method not implemented.');
-  }
-
-  findReferences(fileName: string, position: number): ts.ReferencedSymbol[] | undefined {
-    throw new Error('Method not implemented.');
-  }
-
-  getDocumentHighlights(
-    fileName: string,
-    position: number,
-    filesToSearch: string[]
-  ): ts.DocumentHighlights[] | undefined {
-    throw new Error('Method not implemented.');
-  }
-
-  getNavigateToItems(
-    searchValue: string,
-    maxResultCount?: number | undefined,
-    fileName?: string | undefined,
-    excludeDtsFiles?: boolean | undefined
-  ): ts.NavigateToItem[] {
-    throw new Error('Method not implemented.');
-  }
-
-  getNavigationTree(fileName: string): ts.NavigationTree {
-    throw new Error('Method not implemented.');
-  }
-
-  getOutliningSpans(fileName: string): ts.OutliningSpan[] {
-    throw new Error('Method not implemented.');
-  }
-
-  getTodoComments(fileName: string, descriptors: ts.TodoCommentDescriptor[]): ts.TodoComment[] {
-    throw new Error('Method not implemented.');
-  }
-  getBraceMatchingAtPosition(fileName: string, position: number): ts.TextSpan[] {
-    throw new Error('Method not implemented.');
-  }
-
-  getIndentationAtPosition(fileName: string, position: number, options: ts.EditorOptions | ts.EditorSettings): number {
-    throw new Error('Method not implemented.');
-  }
-
-  getFormattingEditsForDocument(
-    fileName: string,
-    options: ts.FormatCodeOptions | ts.FormatCodeSettings
-  ): ts.TextChange[] {
-    throw new Error('Method not implemented.');
-  }
-
-  getFormattingEditsAfterKeystroke(
-    fileName: string,
-    position: number,
-    key: string,
-    options: ts.FormatCodeOptions | ts.FormatCodeSettings
-  ): ts.TextChange[] {
-    throw new Error('Method not implemented.');
-  }
-
-  getDocCommentTemplateAtPosition(fileName: string, position: number): ts.TextInsertion | undefined {
-    throw new Error('Method not implemented.');
-  }
-
-  isValidBraceCompletionAtPosition(fileName: string, position: number, openingBrace: number): boolean {
-    throw new Error('Method not implemented.');
-  }
-
-  getJsxClosingTagAtPosition(fileName: string, position: number): ts.JsxClosingTagInfo | undefined {
-    throw new Error('Method not implemented.');
-  }
-
-  getSpanOfEnclosingComment(fileName: string, position: number, onlyMultiLine: boolean): ts.TextSpan | undefined {
-    throw new Error('Method not implemented.');
-  }
-
-  getCombinedCodeFix(
-    scope: ts.CombinedCodeFixScope,
-    fixId: {},
-    formatOptions: ts.FormatCodeSettings,
-    preferences: ts.UserPreferences
-  ): ts.CombinedCodeActions {
-    throw new Error('Method not implemented.');
-  }
-
-  applyCodeActionCommand(
-    action: ts.CodeActionCommand,
-    formatSettings?: ts.FormatCodeSettings | undefined
-  ): Promise<ts.ApplyCodeActionCommandResult>;
-  applyCodeActionCommand(
-    action: ts.CodeActionCommand[],
-    formatSettings?: ts.FormatCodeSettings | undefined
-  ): Promise<ts.ApplyCodeActionCommandResult[]>;
-  applyCodeActionCommand(
-    action: ts.InstallPackageAction | ts.GenerateTypesAction | ts.CodeActionCommand[],
-    formatSettings?: ts.FormatCodeSettings | undefined
-  ): Promise<ts.ApplyCodeActionCommandResult | ts.ApplyCodeActionCommandResult[]>;
-  applyCodeActionCommand(fileName: string, action: ts.CodeActionCommand): Promise<ts.ApplyCodeActionCommandResult>;
-  applyCodeActionCommand(fileName: string, action: ts.CodeActionCommand[]): Promise<ts.ApplyCodeActionCommandResult[]>;
-  applyCodeActionCommand(
-    fileName: string,
-    action: ts.InstallPackageAction | ts.GenerateTypesAction | ts.CodeActionCommand[]
-  ): Promise<ts.ApplyCodeActionCommandResult> | Promise<ts.ApplyCodeActionCommandResult[]>;
-  applyCodeActionCommand(fileName: any, action?: any): any {
-    throw new Error('Method not implemented.');
-  }
-  organizeImports(
-    scope: ts.CombinedCodeFixScope,
-    formatOptions: ts.FormatCodeSettings,
-    preferences: ts.UserPreferences | undefined
-  ): readonly ts.FileTextChanges[] {
-    throw new Error('Method not implemented.');
-  }
-  getEditsForFileRename(
-    oldFilePath: string,
-    newFilePath: string,
-    formatOptions: ts.FormatCodeSettings,
-    preferences: ts.UserPreferences | undefined
-  ): readonly ts.FileTextChanges[] {
-    throw new Error('Method not implemented.');
-  }
-  getEmitOutput(fileName: string, emitOnlyDtsFiles?: boolean | undefined): ts.EmitOutput {
-    throw new Error('Method not implemented.');
-  }
-  getProgram(): ts.Program | undefined {
-    throw new Error('Method not implemented.');
-  }
-
-  updateFile(@Reviver(Doc) file: TextDocument) {
+  public updateDocument(file: TextDocument) {
     const path = server.toNormalizedPath(file.uri);
 
     this._host.updateFile(path, file.getText());
@@ -240,114 +64,331 @@ export class Handler implements ts.LanguageService {
     info.reloadFromFile(path);
   }
 
-  getDiagnosticWithLocation(@Reviver(Thru) fileName: string): ts.DiagnosticWithLocation[] {
-    return [
-      ...this._languageService.getSyntacticDiagnostics(fileName),
-      ...(this._languageService.getSemanticDiagnostics(fileName) as any)
+  public configure(c: any) {
+    this.config = c;
+  }
+  public updateFileInfo(): void { }
+  public doValidation(doc: TextDocument): Diagnostic[] {
+    if (!shouldProcess(doc.uri)) {
+      return [];
+    }
+
+    const fileFsPath = getFileFsPath(doc.uri);
+    const rawScriptDiagnostics = [
+      ...this._languageService.getSyntacticDiagnostics(fileFsPath),
+      ...this._languageService.getSemanticDiagnostics(fileFsPath)
     ];
-  }
 
-  onDocumentRemoved(@Reviver(Thru) fileName: string): void {
-    // let info = this._project.getScriptInfo(fileName);
-    // if (info) {
-    //     this._project.removeFile(info, true, true);
-    // }
-  }
+    return rawScriptDiagnostics.map(diag => {
+      const tags: DiagnosticTag[] = [];
 
-  dispose(): void {
-    this.connector.dispose();
-  }
+      if (diag.reportsUnnecessary) {
+        tags.push(DiagnosticTag.Unnecessary);
+      }
 
-  getCompletionsAtPosition(
-    @Reviver(Thru) fileName: string,
-    @Reviver(F64) offset: number
-  ): ts.WithMetadata<ts.CompletionInfo> {
-    return (
-      this._languageService.getCompletionsAtPosition(fileName, offset, {
-        includeCompletionsWithInsertText: true
-        // includeCompletionsForModuleExports: _.get(config, ['vetur', 'completion', 'autoImport'])
-      }) || ({ isIncomplete: false, items: [] } as any)
-    );
+      // syntactic/semantic diagnostic always has start and length
+      // so we can safely cast diag to TextSpan
+      return <Diagnostic>{
+        range: convertRange(doc, diag as ts.TextSpan),
+        severity: DiagnosticSeverity.Error,
+        message: flattenDiagnosticMessageText(diag.messageText, '\n'),
+        tags,
+        code: diag.code,
+        source: 'Vetur'
+      };
+    });
   }
+  doComplete(doc: TextDocument, position: Position): CompletionList {
+    if (!shouldProcess(doc.uri)) {
+      return { isIncomplete: false, items: [] };
+    }
 
-  getCompletionEntryDetails(
-    @Reviver(Thru) fileName: string,
-    @Reviver(F64) offset: number,
-    @Reviver(Thru) label: string,
-    @Reviver(FullJson) config: any,
-    @Reviver(Thru) source: string
-  ): ts.CompletionEntryDetails | undefined {
-    return this._languageService.getCompletionEntryDetails(
-      fileName,
-      offset,
-      label,
-      config, // todo suport other configs?
-      source,
+    const fileFsPath = getFileFsPath(doc.uri);
+    const offset = doc.offsetAt(position);
+    const triggerChar = doc.getText()[offset - 1];
+    if (NON_SCRIPT_TRIGGERS.includes(triggerChar)) {
+      return { isIncomplete: false, items: [] };
+    }
+    const completions = this._languageService.getCompletionsAtPosition(fileFsPath, offset, {
+      includeCompletionsWithInsertText: true,
+      includeCompletionsForModuleExports: !!(
+        this.config &&
+        this.config.vetur &&
+        this.config.vetur.completion &&
+        this.config.vetur.completion.autoImport
+      )
+    });
+    if (!completions) {
+      return { isIncomplete: false, items: [] };
+    }
+    const entries = completions.entries.filter(entry => entry.name !== '__vueEditorBridge');
+    return {
+      isIncomplete: false,
+      items: entries.map((entry, index) => {
+        const range = entry.replacementSpan && convertRange(doc, entry.replacementSpan);
+        return {
+          uri: doc.uri,
+          position,
+          label: entry.name,
+          sortText: entry.sortText + index,
+          kind: convertKind(entry.kind),
+          textEdit: range && TextEdit.replace(range, entry.name),
+          data: {
+            // data used for resolving item details (see 'doResolve')
+            languageId: doc.languageId,
+            uri: doc.uri,
+            offset,
+            source: entry.source
+          }
+        };
+      })
+    };
+  }
+  doResolve(doc: TextDocument, item: CompletionItem): CompletionItem {
+    if (!shouldProcess(doc.uri)) {
+      return item;
+    }
+
+    const fileFsPath = getFileFsPath(doc.uri);
+    const details = this._languageService.getCompletionEntryDetails(
+      fileFsPath,
+      item.data.offset,
+      item.label,
+      getFormatCodeSettings(this.config),
+      item.data.source,
       {
         importModuleSpecifierEnding: 'minimal',
         importModuleSpecifierPreference: 'relative',
         includeCompletionsWithInsertText: true
       }
     );
-  }
-  getQuickInfoAtPosition(@Reviver(Thru) fileName: string, @Reviver(F64) offset: number): ts.QuickInfo | undefined {
-    return this._languageService.getQuickInfoAtPosition(fileName, offset);
-  }
-  getSignatureHelpItems(
-    @Reviver(Thru) fileName: string,
-    @Reviver(F64) offset: number
-  ): ts.SignatureHelpItems | undefined {
-    return this._languageService.getSignatureHelpItems(fileName, offset, undefined);
-  }
+    if (details) {
+      item.detail = displayPartsToString(details.displayParts);
+      const documentation: MarkupContent = {
+        kind: 'markdown',
+        value: displayPartsToString(details.documentation)
+      };
+      if (details.codeActions && this.config.vetur.completion.autoImport) {
+        const textEdits = convertCodeAction(doc, details.codeActions, this._firstScriptRegion);
+        item.additionalTextEdits = textEdits;
 
-  getOccurrencesAtPosition(
-    @Reviver(Thru) fileName: string,
-    @Reviver(F64) offset: number
-  ): ts.ReferenceEntry[] | undefined {
-    return this._languageService.getOccurrencesAtPosition(fileName, offset) as any;
+        details.codeActions.forEach(action => {
+          if (action.description) {
+            documentation.value += '\n' + action.description;
+          }
+        });
+      }
+      item.documentation = documentation;
+      delete item.data;
+    }
+    return item;
   }
+  doHover(textDoc: TextDocument, position: Position): Hover {
+    if (!shouldProcess(textDoc.uri)) {
+      return { contents: [] };
+    }
 
-  getNavigationBarItems(@Reviver(Thru) fileName: string): ts.NavigationBarItem[] {
-    return this._languageService.getNavigationBarItems(fileName);
+    const fileFsPath = getFileFsPath(textDoc.uri);
+    const info = this._languageService.getQuickInfoAtPosition(fileFsPath, textDoc.offsetAt(position));
+    if (info) {
+      const display = displayPartsToString(info.displayParts);
+      const doc = displayPartsToString(info.documentation);
+      const markedContents: MarkedString[] = [{ language: 'ts', value: display }];
+      if (doc) {
+        markedContents.unshift(doc, '\n');
+      }
+      return {
+        range: convertRange(textDoc, info.textSpan),
+        contents: markedContents
+      };
+    }
+    return { contents: [] };
   }
+  doSignatureHelp(doc: TextDocument, position: Position): SignatureHelp | null {
+    if (!shouldProcess(doc.uri)) {
+      return NULL_SIGNATURE;
+    }
 
-  getDefinitionAtPosition(@Reviver(Thru) fileName: string, @Reviver(F64) offset: number): readonly DefinitionInfo[] {
-    return this._languageService.getDefinitionAtPosition(fileName, offset) || [];
+    const fileFsPath = getFileFsPath(doc.uri);
+    const signHelp = this._languageService.getSignatureHelpItems(fileFsPath, doc.offsetAt(position), undefined);
+    if (!signHelp) {
+      return NULL_SIGNATURE;
+    }
+    const ret: SignatureHelp = {
+      activeSignature: signHelp.selectedItemIndex,
+      activeParameter: signHelp.argumentIndex,
+      signatures: []
+    };
+    signHelp.items.forEach(item => {
+      const signature: SignatureInformation = {
+        label: '',
+        documentation: undefined,
+        parameters: []
+      };
+
+      signature.label += displayPartsToString(item.prefixDisplayParts);
+      item.parameters.forEach((p, i, a) => {
+        const label = displayPartsToString(p.displayParts);
+        const parameter: ParameterInformation = {
+          label,
+          documentation: displayPartsToString(p.documentation)
+        };
+        signature.label += label;
+        signature.parameters!.push(parameter);
+        if (i < a.length - 1) {
+          signature.label += displayPartsToString(item.separatorDisplayParts);
+        }
+      });
+      signature.label += displayPartsToString(item.suffixDisplayParts);
+      ret.signatures.push(signature);
+    });
+    return ret;
   }
+  findDocumentHighlight(doc: TextDocument, position: Position): DocumentHighlight[] {
+    if (!shouldProcess(doc.uri)) {
+      return [];
+    }
 
-  getReferencesAtPosition(
-    @Reviver(Thru) fileName: string,
-    @Reviver(F64) offset: number
-  ): ts.ReferenceEntry[] | undefined {
-    return this._languageService.getReferencesAtPosition(fileName, offset);
+    const fileFsPath = getFileFsPath(doc.uri);
+    const occurrences = this._languageService.getOccurrencesAtPosition(fileFsPath, doc.offsetAt(position));
+    if (occurrences) {
+      return occurrences.map(entry => {
+        return {
+          range: convertRange(doc, entry.textSpan),
+          kind: entry.isWriteAccess ? DocumentHighlightKind.Write : DocumentHighlightKind.Text
+        };
+      });
+    }
+    return [];
   }
+  findDocumentSymbols(doc: TextDocument): SymbolInformation[] {
+    if (!shouldProcess(doc.uri)) {
+      return [];
+    }
 
-  getCodeFixesAtPosition(
-    @Reviver(Thru) fileName: string,
-    @Reviver(F64) start: number,
-    @Reviver(F64) end: number,
-    @Reviver(ArrayOf(F64)) fixableDiagnosticCodes: number[],
-    @Reviver(FullJson) formatSettings: ts.FormatCodeSettings
-  ): readonly ts.CodeFixAction[] {
-    return this._languageService.getCodeFixesAtPosition(
+    const fileFsPath = getFileFsPath(doc.uri);
+    const items = this._languageService.getNavigationBarItems(fileFsPath);
+    if (!items) {
+      return [];
+    }
+    const result: SymbolInformation[] = [];
+    const existing: { [k: string]: boolean } = {};
+    const collectSymbols = (item: ts.NavigationBarItem, containerLabel?: string) => {
+      const sig = item.text + item.kind + item.spans[0].start;
+      if (item.kind !== 'script' && !existing[sig]) {
+        const symbol: SymbolInformation = {
+          name: item.text,
+          kind: convertSymbolKind(item.kind),
+          location: {
+            uri: doc.uri,
+            range: convertRange(doc, item.spans[0])
+          },
+          containerName: containerLabel
+        };
+        existing[sig] = true;
+        result.push(symbol);
+        containerLabel = item.text;
+      }
+
+      if (item.childItems && item.childItems.length > 0) {
+        for (const child of item.childItems) {
+          collectSymbols(child, containerLabel);
+        }
+      }
+    };
+
+    items.forEach(item => collectSymbols(item));
+    return result;
+  }
+  findDefinition(doc: TextDocument, position: Position): Definition {
+    if (!shouldProcess(doc.uri)) {
+      return [];
+    }
+
+    const fileFsPath = getFileFsPath(doc.uri);
+    const definitions = this._languageService.getDefinitionAtPosition(fileFsPath, doc.offsetAt(position));
+    if (!definitions) {
+      return [];
+    }
+
+    const definitionResults: Definition = [];
+    const program = this._languageService.getProgram();
+    if (!program) {
+      return [];
+    }
+    definitions.forEach(d => {
+      const definitionTargetDoc = getSourceDoc(d.fileName, program);
+      definitionResults.push({
+        uri: Uri.file(d.fileName).toString(),
+        range: convertRange(definitionTargetDoc, d.textSpan)
+      });
+    });
+    return definitionResults;
+  }
+  findReferences(doc: TextDocument, position: Position): Location[] {
+    if (!shouldProcess(doc.uri)) {
+      return [];
+    }
+
+    const fileFsPath = getFileFsPath(doc.uri);
+    const references = this._languageService.getReferencesAtPosition(fileFsPath, doc.offsetAt(position));
+    if (!references) {
+      return [];
+    }
+
+    const referenceResults: Location[] = [];
+    const program = this._languageService.getProgram();
+    if (!program) {
+      return [];
+    }
+    references.forEach(r => {
+      const referenceTargetDoc = getSourceDoc(r.fileName, program);
+      if (referenceTargetDoc) {
+        referenceResults.push({
+          uri: Uri.file(r.fileName).toString(),
+          range: convertRange(referenceTargetDoc, r.textSpan)
+        });
+      }
+    });
+    return referenceResults;
+  }
+  getCodeActions(doc: TextDocument, range: Range, _formatParams: FormattingOptions, context: CodeActionContext) {
+    const fileName = getFileFsPath(doc.uri);
+    const start = doc.offsetAt(range.start);
+    const end = doc.offsetAt(range.end);
+    if (!supportedCodeFixCodes) {
+      supportedCodeFixCodes = new Set(
+        getSupportedCodeFixes()
+          .map(Number)
+          .filter(x => !isNaN(x))
+      );
+    }
+    const fixableDiagnosticCodes = context.diagnostics.map(d => +d.code!).filter(c => supportedCodeFixCodes!.has(c));
+    if (!fixableDiagnosticCodes) {
+      return [];
+    }
+
+    const formatSettings: ts.FormatCodeSettings = getFormatCodeSettings(this.config);
+
+    const result: Command[] = [];
+    const fixes = this._languageService.getCodeFixesAtPosition(
       fileName,
       start,
       end,
       fixableDiagnosticCodes,
       formatSettings,
       /*preferences*/ {}
-    ) as any;
-  }
+    );
+    collectQuickFixCommands(fixes, this._languageService, result);
 
-  getApplicableRefactors(
-    @Reviver(Thru) fileName: string,
-    @Reviver(FullJson) range: ts.TextRange
-  ): ts.ApplicableRefactorInfo[] {
-    return this._languageService.getApplicableRefactors(fileName, range, /*preferences*/ {});
-  }
+    const textRange = { pos: start, end };
+    const refactorings = this._languageService.getApplicableRefactors(fileName, textRange, /*preferences*/ {});
+    collectRefactoringCommands(refactorings, fileName, formatSettings, textRange, result);
 
-  getEditsForRefactor(@Reviver(FullJson) args: any): ts.RefactorEditInfo | undefined {
-    return this._languageService.getEditsForRefactor(
+    return result;
+  }
+  getRefactorEdits(doc: TextDocument, args: RefactorAction) {
+    const response = this._languageService.getEditsForRefactor(
       args.fileName,
       args.formatOptions,
       args.textRange,
@@ -355,14 +396,290 @@ export class Handler implements ts.LanguageService {
       args.actionName,
       args.preferences
     );
+    if (!response) {
+      // TODO: What happens when there's no response?
+      return createApplyCodeActionCommand('', {});
+    }
+    const uriMapping = createUriMappingForEdits(response.edits, this._languageService);
+    return createApplyCodeActionCommand('', uriMapping);
+  }
+  format(doc: TextDocument, range: Range, formatParams: FormattingOptions): TextEdit[] {
+
+    const defaultFormatter =
+      doc.languageId === 'javascript'
+        ? this.config.vetur.format.defaultFormatter.js
+        : this.config.vetur.format.defaultFormatter.ts;
+
+    if (defaultFormatter === 'none') {
+      return [];
+    }
+
+    const parser = doc.languageId === 'javascript' ? 'babylon' : 'typescript';
+    const needInitialIndent = this.config.vetur.format.scriptInitialIndent;
+    const vlsFormatConfig: VLSFormatConfig = this.config.vetur.format;
+
+    if (defaultFormatter === 'prettier' || defaultFormatter === 'prettier-eslint') {
+      const code = doc.getText(range);
+      const filePath = getFileFsPath(doc.uri);
+
+      return defaultFormatter === 'prettier'
+        ? prettierify(code, filePath, range, vlsFormatConfig, parser, needInitialIndent)
+        : prettierEslintify(code, filePath, range, vlsFormatConfig, parser, needInitialIndent);
+    } else {
+      const initialIndentLevel = needInitialIndent ? 1 : 0;
+      const formatSettings: ts.FormatCodeSettings =
+        doc.languageId === 'javascript' ? this.config.javascript.format : this.config.typescript.format;
+      const convertedFormatSettings = convertOptions(
+        formatSettings,
+        {
+          tabSize: vlsFormatConfig.options.tabSize,
+          insertSpaces: !vlsFormatConfig.options.useTabs
+        },
+        initialIndentLevel
+      );
+
+      const fileFsPath = getFileFsPath(doc.uri);
+      const start = doc.offsetAt(range.start);
+      const end = doc.offsetAt(range.end);
+      const edits = this._languageService.getFormattingEditsForRange(fileFsPath, start, end, convertedFormatSettings);
+
+      if (!edits) {
+        return [];
+      }
+      const result = [];
+      for (const edit of edits) {
+        if (edit.span.start >= start && edit.span.start + edit.span.length <= end) {
+          result.push({
+            range: convertRange(doc, edit.span),
+            newText: edit.newText
+          });
+        }
+      }
+      return result;
+    }
+  }
+  onDocumentRemoved(_document: TextDocument) { }
+  onDocumentChanged(_filePath: string) { }
+}
+
+
+function convertOptions(
+  formatSettings: ts.FormatCodeSettings,
+  options: FormattingOptions,
+  initialIndentLevel: number
+): ts.FormatCodeSettings {
+  return Object.assign(formatSettings, {
+    convertTabsToSpaces: options.insertSpaces,
+    tabSize: options.tabSize,
+    indentSize: options.tabSize,
+    baseIndentSize: options.tabSize * initialIndentLevel
+  });
+}
+
+
+function convertCodeAction(
+  doc: TextDocument,
+  codeActions: ts.CodeAction[],
+  regionStart: LanguageModelCache<LanguageRange | undefined>
+): TextEdit[] {
+  const scriptStartOffset = doc.offsetAt(regionStart.get(doc)!.start);
+  const textEdits: TextEdit[] = [];
+  for (const action of codeActions) {
+    for (const change of action.changes) {
+      textEdits.push(
+        ...change.textChanges.map(tc => {
+          // currently, only import codeAction is available
+          // change start of doc to start of script region
+          if (tc.span.start <= scriptStartOffset && tc.span.length === 0) {
+            const region = regionStart.get(doc);
+            if (region) {
+              const line = region.start.line;
+              return {
+                range: Range.create(line + 1, 0, line + 1, 0),
+                newText: tc.newText
+              };
+            }
+          }
+          return {
+            range: convertRange(doc, tc.span),
+            newText: tc.newText
+          };
+        })
+      );
+    }
+  }
+  return textEdits;
+}
+
+
+function convertKind(kind: ts.ScriptElementKind): CompletionItemKind {
+  switch (kind) {
+    case 'primitive type':
+    case 'keyword':
+      return CompletionItemKind.Keyword;
+    case 'var':
+    case 'local var':
+      return CompletionItemKind.Variable;
+    case 'property':
+    case 'getter':
+    case 'setter':
+      return CompletionItemKind.Field;
+    case 'function':
+    case 'method':
+    case 'construct':
+    case 'call':
+    case 'index':
+      return CompletionItemKind.Function;
+    case 'enum':
+      return CompletionItemKind.Enum;
+    case 'module':
+      return CompletionItemKind.Module;
+    case 'class':
+      return CompletionItemKind.Class;
+    case 'interface':
+      return CompletionItemKind.Interface;
+    case 'warning':
+      return CompletionItemKind.File;
   }
 
-  getFormattingEditsForRange(
-    @Reviver(Thru) fileName: string,
-    @Reviver(F64) start: number,
-    @Reviver(F64) end: number,
-    @Reviver(FullJson) convertedFormatSettings: ts.FormatCodeOptions | ts.FormatCodeSettings
-  ): ts.TextChange[] {
-    return this._languageService.getFormattingEditsForRange(fileName, start, end, convertedFormatSettings);
+  return CompletionItemKind.Property;
+}
+
+
+function getFormatCodeSettings(config: any): ts.FormatCodeSettings {
+  return {
+    tabSize: config.vetur.format.options.tabSize,
+    indentSize: config.vetur.format.options.tabSize,
+    convertTabsToSpaces: !config.vetur.format.options.useTabs
+  };
+}
+
+function convertRange(document: TextDocument, span: ts.TextSpan): Range {
+  const startPosition = document.positionAt(span.start);
+  const endPosition = document.positionAt(span.start + span.length);
+  return Range.create(startPosition, endPosition);
+}
+
+function shouldProcess(fileName: string) {
+  return fileName.endsWith('vue');
+}
+
+function convertSymbolKind(kind: ts.ScriptElementKind): SymbolKind {
+  switch (kind) {
+    case 'var':
+    case 'local var':
+    case 'const':
+      return SymbolKind.Variable;
+    case 'function':
+    case 'local function':
+      return SymbolKind.Function;
+    case 'enum':
+      return SymbolKind.Enum;
+    case 'module':
+      return SymbolKind.Module;
+    case 'class':
+      return SymbolKind.Class;
+    case 'interface':
+      return SymbolKind.Interface;
+    case 'method':
+      return SymbolKind.Method;
+    case 'property':
+    case 'getter':
+    case 'setter':
+      return SymbolKind.Property;
+  }
+  return SymbolKind.Variable;
+}
+
+function getSourceDoc(fileName: string, program: ts.Program): TextDocument {
+  const sourceFile = program.getSourceFile(fileName)!;
+  return TextDocument.create(fileName, 'vue', 0, sourceFile.getFullText());
+}
+
+
+
+function createUriMappingForEdits(changes: ts.FileTextChanges[], service: ts.LanguageService) {
+  const program = service.getProgram()!;
+  const result: Record<string, TextEdit[]> = {};
+  for (const { fileName, textChanges } of changes) {
+    const targetDoc = getSourceDoc(fileName, program);
+    const edits = textChanges.map(({ newText, span }) => ({
+      newText,
+      range: convertRange(targetDoc, span)
+    }));
+    const uri = Uri.file(fileName).toString();
+    if (result[uri]) {
+      result[uri].push(...edits);
+    } else {
+      result[uri] = edits;
+    }
+  }
+  return result;
+}
+
+
+function createApplyCodeActionCommand(title: string, uriTextEditMapping: Record<string, TextEdit[]>): Command {
+  return {
+    title,
+    command: 'vetur.applyWorkspaceEdits',
+    arguments: [
+      {
+        changes: uriTextEditMapping
+      }
+    ]
+  };
+}
+function collectQuickFixCommands(
+  fixes: ReadonlyArray<ts.CodeFixAction>,
+  service: ts.LanguageService,
+  result: Command[]
+) {
+  for (const fix of fixes) {
+    const uriTextEditMapping = createUriMappingForEdits(fix.changes, service);
+    result.push(createApplyCodeActionCommand(fix.description, uriTextEditMapping));
+  }
+}
+
+
+function collectRefactoringCommands(
+  refactorings: ts.ApplicableRefactorInfo[],
+  fileName: string,
+  formatSettings: any,
+  textRange: { pos: number; end: number },
+  result: Command[]
+) {
+  const actions: RefactorAction[] = [];
+  for (const refactoring of refactorings) {
+    const refactorName = refactoring.name;
+    if (refactoring.inlineable) {
+      actions.push({
+        fileName,
+        formatOptions: formatSettings,
+        textRange,
+        refactorName,
+        actionName: refactorName,
+        preferences: {},
+        description: refactoring.description
+      });
+    } else {
+      actions.push(
+        ...refactoring.actions.map(action => ({
+          fileName,
+          formatOptions: formatSettings,
+          textRange,
+          refactorName,
+          actionName: action.name,
+          preferences: {},
+          description: action.description
+        }))
+      );
+    }
+  }
+  for (const action of actions) {
+    result.push({
+      command: 'vetur.chooseTypeScriptRefactoring',
+      title: action.description,
+      arguments: [action]
+    });
   }
 }

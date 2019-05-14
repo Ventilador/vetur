@@ -2,227 +2,136 @@ import { Socket } from 'net';
 import { fromBuffer, toBuffer } from './parser';
 import { JoinMessages } from './joinMessages';
 import { SocketMessage, MessageType } from './serialization/socketMessage';
-import {
-  EmitOutput,
-  FormatCodeSettings,
-  TextRange,
-  CodeActionCommand,
-  JsxClosingTagInfo,
-  TextInsertion,
-  FormatCodeOptions,
-  EditorOptions,
-  TextSpan,
-  OutliningSpan,
-  NavigationBarItem,
-  ReferenceEntry,
-  ImplementationLocation,
-  NavigateToItem,
-  DefinitionInfo,
-  SignatureHelpItemsOptions,
-  RenameInfoOptions,
-  Classifications,
-  ClassifiedSpan,
-  RefactorEditInfo,
-  OrganizeImportsScope
-} from 'typescript/lib/tsserverlibrary';
-import {
-  UserPreferences,
-  ApplyCodeActionCommandResult,
-  ApplicableRefactorInfo,
-  FileTextChanges,
-  LineAndCharacter,
-  TextChange,
-  EditorSettings,
-  TodoComment,
-  TodoCommentDescriptor,
-  NavigationTree,
-  CombinedCodeFixScope,
-  CombinedCodeActions,
-  ReferencedSymbol,
-  DocumentHighlights,
-  DefinitionInfoAndBoundSpan,
-  RenameInfo,
-  SignatureHelpItems,
-  GetCompletionsAtPositionOptions,
-  QuickInfo,
-  WithMetadata,
-  CompletionInfo,
-  DiagnosticWithLocation,
-  CompletionEntryDetails,
-  RenameLocation,
-  CodeFixAction
-} from 'typescript';
-import { Diagnostic } from 'vscode-languageserver';
+import { Diagnostic, TextEdit } from 'vscode-languageserver-types';
+import { Method, IMetadataItem, Argument } from './decorators/reviver';
+import { FullJson } from './serialization/json';
+import { TextDocument, CompletionList, CompletionItem, Hover, SignatureHelp, DocumentHighlight, SymbolInformation, Definition, Location, CodeActionContext, Command, Range, FormattingOptions, Position } from 'vscode-languageserver';
+import { Doc, DocWithText } from './serialization/document';
+import { RefactorAction } from '../server/types';
+import { Thru } from './serialization/thru';
+import { ArrayOf } from './serialization/arrayOf';
 
-export interface LanguageServiceAsync {
-  cleanupSemanticCache(): Promise<void>;
-  getSyntacticDiagnostics(fileName: string): Promise<DiagnosticWithLocation[]>;
-  getSemanticDiagnostics(fileName: string): Promise<Diagnostic[]>;
-  getSuggestionDiagnostics(fileName: string): Promise<DiagnosticWithLocation[]>;
-  getCompilerOptionsDiagnostics(): Promise<Diagnostic[]>;
-  getSyntacticClassifications(fileName: string, span: TextSpan): Promise<ClassifiedSpan[]>;
-  getSemanticClassifications(fileName: string, span: TextSpan): Promise<ClassifiedSpan[]>;
-  getEncodedSyntacticClassifications(fileName: string, span: TextSpan): Promise<Classifications>;
-  getEncodedSemanticClassifications(fileName: string, span: TextSpan): Promise<Classifications>;
-  getCompletionsAtPosition(
-    fileName: string,
-    position: number,
-    options: GetCompletionsAtPositionOptions | undefined
-  ): Promise<WithMetadata<CompletionInfo> | undefined>;
-  getCompletionEntryDetails(
-    fileName: string,
-    position: number,
-    name: string,
-    formatOptions: FormatCodeOptions | FormatCodeSettings | undefined,
-    source: string | undefined,
-    preferences: UserPreferences | undefined
-  ): Promise<CompletionEntryDetails | undefined>;
-  getCompletionEntrySymbol(
-    fileName: string,
-    position: number,
-    name: string,
-    source: string | undefined
-  ): Promise<Symbol | undefined>;
-  getQuickInfoAtPosition(fileName: string, position: number): Promise<QuickInfo | undefined>;
-  getNameOrDottedNameSpan(fileName: string, startPos: number, endPos: number): Promise<TextSpan | undefined>;
-  getBreakpointStatementAtPosition(fileName: string, position: number): Promise<TextSpan | undefined>;
-  getSignatureHelpItems(
-    fileName: string,
-    position: number,
-    options: SignatureHelpItemsOptions | undefined
-  ): Promise<SignatureHelpItems | undefined>;
-  getRenameInfo(fileName: string, position: number, options?: RenameInfoOptions): Promise<RenameInfo>;
-  findRenameLocations(
-    fileName: string,
-    position: number,
-    findInStrings: boolean,
-    findInComments: boolean,
-    providePrefixAndSuffixTextForRename?: boolean
-  ): Promise<ReadonlyArray<RenameLocation> | undefined>;
-  getDefinitionAtPosition(fileName: string, position: number): Promise<ReadonlyArray<DefinitionInfo> | undefined>;
-  getDefinitionAndBoundSpan(fileName: string, position: number): Promise<DefinitionInfoAndBoundSpan | undefined>;
-  getTypeDefinitionAtPosition(fileName: string, position: number): Promise<ReadonlyArray<DefinitionInfo> | undefined>;
-  getImplementationAtPosition(
-    fileName: string,
-    position: number
-  ): Promise<ReadonlyArray<ImplementationLocation> | undefined>;
-  getReferencesAtPosition(fileName: string, position: number): Promise<ReferenceEntry[] | undefined>;
-  findReferences(fileName: string, position: number): Promise<ReferencedSymbol[] | undefined>;
-  getDocumentHighlights(
-    fileName: string,
-    position: number,
-    filesToSearch: string[]
-  ): Promise<DocumentHighlights[] | undefined>;
-  getOccurrencesAtPosition(fileName: string, position: number): Promise<ReadonlyArray<ReferenceEntry> | undefined>;
-  getNavigateToItems(
-    searchValue: string,
-    maxResultCount?: number,
-    fileName?: string,
-    excludeDtsFiles?: boolean
-  ): Promise<NavigateToItem[]>;
-  getNavigationBarItems(fileName: string): Promise<NavigationBarItem[]>;
-  getNavigationTree(fileName: string): Promise<NavigationTree>;
-  getOutliningSpans(fileName: string): Promise<OutliningSpan[]>;
-  getTodoComments(fileName: string, descriptors: TodoCommentDescriptor[]): Promise<TodoComment[]>;
-  getBraceMatchingAtPosition(fileName: string, position: number): Promise<TextSpan[]>;
-  getIndentationAtPosition(
-    fileName: string,
-    position: number,
-    options: EditorOptions | EditorSettings
-  ): Promise<number>;
-  getFormattingEditsForRange(
-    fileName: string,
-    start: number,
-    end: number,
-    options: FormatCodeOptions | FormatCodeSettings
-  ): Promise<TextChange[]>;
-  getFormattingEditsForDocument(
-    fileName: string,
-    options: FormatCodeOptions | FormatCodeSettings
-  ): Promise<TextChange[]>;
-  getFormattingEditsAfterKeystroke(
-    fileName: string,
-    position: number,
-    key: string,
-    options: FormatCodeOptions | FormatCodeSettings
-  ): Promise<TextChange[]>;
-  getDocCommentTemplateAtPosition(fileName: string, position: number): Promise<TextInsertion | undefined>;
-  isValidBraceCompletionAtPosition(fileName: string, position: number, openingBrace: number): Promise<boolean>;
-  getJsxClosingTagAtPosition(fileName: string, position: number): Promise<JsxClosingTagInfo | undefined>;
-  getSpanOfEnclosingComment(fileName: string, position: number, onlyMultiLine: boolean): Promise<TextSpan | undefined>;
-  toLineColumnOffset?(fileName: string, position: number): Promise<LineAndCharacter>;
-  getCodeFixesAtPosition(
-    fileName: string,
-    start: number,
-    end: number,
-    errorCodes: ReadonlyArray<number>,
-    formatOptions: FormatCodeSettings,
-    preferences: UserPreferences
-  ): Promise<ReadonlyArray<CodeFixAction>>;
-  getCombinedCodeFix(
-    scope: CombinedCodeFixScope,
-    fixId: {},
-    formatOptions: FormatCodeSettings,
-    preferences: UserPreferences
-  ): Promise<CombinedCodeActions>;
-  applyCodeActionCommand(
-    action: CodeActionCommand,
-    formatSettings?: FormatCodeSettings
-  ): Promise<ApplyCodeActionCommandResult>;
-  applyCodeActionCommand(
-    action: CodeActionCommand[],
-    formatSettings?: FormatCodeSettings
-  ): Promise<ApplyCodeActionCommandResult[]>;
-  applyCodeActionCommand(
-    action: CodeActionCommand | CodeActionCommand[],
-    formatSettings?: FormatCodeSettings
-  ): Promise<ApplyCodeActionCommandResult | ApplyCodeActionCommandResult[]>;
-  /** @deprecated `fileName` will be ignored */
-  applyCodeActionCommand(fileName: string, action: CodeActionCommand): Promise<ApplyCodeActionCommandResult>;
-  /** @deprecated `fileName` will be ignored */
-  applyCodeActionCommand(fileName: string, action: CodeActionCommand[]): Promise<ApplyCodeActionCommandResult[]>;
-  /** @deprecated `fileName` will be ignored */
-  applyCodeActionCommand(
-    fileName: string,
-    action: CodeActionCommand | CodeActionCommand[]
-  ): Promise<ApplyCodeActionCommandResult | ApplyCodeActionCommandResult[]>;
-  getApplicableRefactors(
-    fileName: string,
-    positionOrRange: number | TextRange,
-    preferences: UserPreferences | undefined
-  ): Promise<ApplicableRefactorInfo[]>;
-  getEditsForRefactor(
-    fileName: string,
-    formatOptions: FormatCodeSettings,
-    positionOrRange: number | TextRange,
-    refactorName: string,
-    actionName: string,
-    preferences: UserPreferences | undefined
-  ): Promise<RefactorEditInfo | undefined>;
-  organizeImports(
-    scope: OrganizeImportsScope,
-    formatOptions: FormatCodeSettings,
-    preferences: UserPreferences | undefined
-  ): Promise<ReadonlyArray<FileTextChanges>>;
-  getEditsForFileRename(
-    oldFilePath: string,
-    newFilePath: string,
-    formatOptions: FormatCodeSettings,
-    preferences: UserPreferences | undefined
-  ): Promise<ReadonlyArray<FileTextChanges>>;
-  getEmitOutput(fileName: string, emitOnlyDtsFiles?: boolean): Promise<EmitOutput>;
-  dispose(): Promise<void>;
+
+export abstract class AsyncLanguageService {
+  public static METADATA: IMetadataItem[] = [];
+  public bus$: MessageConnector;
+  constructor(socket: Socket, onError: (err: any) => any) {
+    this.bus$ = new MessageConnector(socket, onError);
+    AsyncLanguageService.METADATA.forEach((m: IMetadataItem) => {
+      (this as any)[m.name] = this.initWrapper(m);
+    });
+  }
+  public abstract dispose(): void;
+  protected abstract initWrapper(metadata: IMetadataItem): Function;
+
+
+  @Method() updateDocument(
+    @Argument(DocWithText) doc: TextDocument
+  ): Promise<void> | void {
+    throw new Error('Not implemented');
+  }
+  @Method() configure(
+    @Argument(FullJson) c: any
+  ): Promise<void> | void {
+    throw new Error('Not implemented');
+  }
+  @Method() updateFileInfo(
+    @Argument(Doc) doc: TextDocument
+  ): Promise<void> | void {
+    throw new Error('Not implemented');
+  }
+  @Method(ArrayOf(FullJson)) doValidation(
+    @Argument(Doc) doc: TextDocument
+  ): Promise<Diagnostic[]> | Diagnostic[] {
+    throw new Error('Not implemented');
+  }
+  @Method(FullJson) doComplete(
+    @Argument(Doc) doc: TextDocument,
+    @Argument(FullJson) position: Position
+  ): Promise<CompletionList> | CompletionList {
+    throw new Error('Not implemented');
+  }
+  @Method(FullJson) doResolve(
+    @Argument(Doc) doc: TextDocument,
+    @Argument(FullJson) item: CompletionItem
+  ): Promise<CompletionItem> | CompletionItem {
+    throw new Error('Not implemented');
+  }
+  @Method(FullJson) doHover(
+    @Argument(Doc) doc: TextDocument,
+    @Argument(FullJson) position: Position
+  ): Promise<Hover> | Hover {
+    throw new Error('Not implemented');
+  }
+  @Method(FullJson) doSignatureHelp(
+    @Argument(Doc) doc: TextDocument,
+    @Argument(FullJson) position: Position
+  ): Promise<SignatureHelp | null> | SignatureHelp | null {
+    throw new Error('Not implemented');
+  }
+  @Method(FullJson) findDocumentHighlight(
+    @Argument(Doc) doc: TextDocument,
+    @Argument(FullJson) position: Position
+  ): Promise<DocumentHighlight[]> | DocumentHighlight[] {
+    throw new Error('Not implemented');
+  }
+  @Method(ArrayOf(FullJson)) findDocumentSymbols(
+    @Argument(Doc) doc: TextDocument
+  ): Promise<SymbolInformation[]> | SymbolInformation[] {
+    throw new Error('Not implemented');
+  }
+  @Method(FullJson) findDefinition(
+    @Argument(Doc) doc: TextDocument,
+    @Argument(FullJson) position: Position
+  ): Promise<Definition> | Definition {
+    throw new Error('Not implemented');
+  }
+  @Method(FullJson) findReferences(
+    @Argument(Doc) doc: TextDocument,
+    @Argument(FullJson) position: Position
+  ): Promise<Location[]> | Location[] {
+    throw new Error('Not implemented');
+  }
+  @Method(ArrayOf(FullJson)) getCodeActions(
+    @Argument(Doc) doc: TextDocument,
+    @Argument(FullJson) range: Range,
+    @Argument(FullJson) formatParams: FormattingOptions,
+    @Argument(FullJson) context: CodeActionContext
+  ): Promise<Command[]> | Command[] {
+    throw new Error('Not implemented');
+  }
+  @Method(FullJson) getRefactorEdits(
+    @Argument(Doc) doc: TextDocument,
+    @Argument(FullJson) args: RefactorAction
+  ): Promise<Command> | Command {
+    throw new Error('Not implemented');
+  }
+  @Method(ArrayOf(FullJson)) format(
+    @Argument(Doc) doc: TextDocument,
+    @Argument(FullJson) range: Range,
+    @Argument(FullJson) formatParams: FormattingOptions
+  ): Promise<TextEdit[]> | TextEdit[] {
+    throw new Error('Not implemented');
+  }
+  @Method() onDocumentRemoved(@Argument(Doc) doc: TextDocument): Promise<void> | void {
+    throw new Error('Not implemented');
+  }
+  @Method() onDocumentChanged(@Argument(Thru) filePath: string): Promise<void> | void {
+    throw new Error('Not implemented');
+  }
 }
+
 
 export class MessageConnector {
   private _channel: Channel;
-
+  private events: Record<string, Function> = Object.create(null);
   constructor(private _socket: Socket, private _onError: (err: any) => any) {
     _socket.pipe(new JoinMessages()).on('data', onData);
     function onData(data: Buffer) {
       dispatchData(fromBuffer<SocketMessage>(data, SocketMessage));
     }
     const channel = (this._channel = new Channel());
+    const events = this.events;
     function dispatchData(value: SocketMessage) {
       if (value.type === MessageType.Response) {
         const id = +value.args.shift()!;
@@ -244,10 +153,42 @@ export class MessageConnector {
         _onError.apply(null, value.args as any);
         return;
       }
+
+      if (value.type === MessageType.Request) {
+        handleRequest(value);
+      }
+    }
+
+    function handleRequest(value: SocketMessage) {
+      if (events[value.action]) {
+        events[value.action].apply(null, value.args)
+          .then((result: any) => {
+            _socket.write(toBuffer<SocketMessage>(
+              {
+                type: MessageType.Response,
+                action: value.action,
+                args: [null, result],
+                id: value.id
+              },
+              SocketMessage
+            ))
+          }, (result: any) => _socket.write(toBuffer<SocketMessage>(
+            {
+              type: MessageType.Response,
+              action: value.action,
+              args: [result, null],
+              id: value.id
+            },
+            SocketMessage
+          ))
+          );
+      }
     }
   }
 
-  request<T>(action: string, args: any[] = []): Promise<T> {
+  request<T>(
+    action: string, args: any[] = []
+  ): Promise<T> {
     return new Promise((res, rej) => {
       const id = this._channel.put((err, result) => {
         if (err) {
@@ -256,13 +197,13 @@ export class MessageConnector {
           res(result);
         }
       });
-      args.unshift(id);
       this._socket.write(
         toBuffer<SocketMessage>(
           {
             type: MessageType.Request,
             action,
-            args
+            args,
+            id
           },
           SocketMessage
         )
@@ -270,8 +211,27 @@ export class MessageConnector {
     });
   }
 
+  onRequest(name: string, fn: Function) {
+    this.events[name] = function () {
+      try {
+        const result = fn.apply(null, arguments);
+        if (result && result.then) {
+          return result;
+        } else {
+          return Promise.resolve(result);
+        }
+      } catch (err) {
+        Promise.reject(err);
+      }
+    }
+  }
+
   dispose() {
     this._socket.end();
+  }
+
+  private handleRequest() {
+
   }
 }
 
@@ -282,7 +242,7 @@ class Channel {
   put(cb: (err: Error, result?: any) => any) {
     const id = this.available.length ? this.available.pop()! : this.len++;
     const self = this;
-    this.channels[id] = function() {
+    this.channels[id] = function () {
       self.channels[id] = undefined;
       self.available.push(id);
       return cb.apply(this, arguments as any);

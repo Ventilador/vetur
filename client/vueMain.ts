@@ -11,6 +11,13 @@ import {
 } from './virtualFileCommands';
 
 export async function activate(context: vscode.ExtensionContext) {
+  const tsExt = vscode.extensions.getExtension('vscode.typescript-language-features')
+  if (!tsExt) {
+    throw new Error('Typescript extension not found?');
+  }
+  if (!tsExt.isActive) {
+    await tsExt.activate();
+  }
   /**
    * Virtual file display command for debugging template interpolation
    */

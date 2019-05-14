@@ -69,6 +69,8 @@ export async function getJavascriptMode(
     return scriptRegions.length > 0 ? scriptRegions[0] : undefined;
   });
 
+  
+
   let tsModule: T_TypeScript = ts;
   if (dependencyService) {
     const tsDependency = dependencyService.getDependency('typescript');

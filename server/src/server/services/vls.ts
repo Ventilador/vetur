@@ -77,7 +77,7 @@ export class VLS {
     this.vueInfoService = new VueInfoService();
     this.dependencyService = new DependencyService();
 
-    this.languageModes = new LanguageModes();
+    this.languageModes = new LanguageModes(this.documentService);
   }
 
   async init(params: InitializeParams) {
@@ -185,7 +185,6 @@ export class VLS {
       if (!jsMode) {
         throw Error(`Can't find JS mode.`);
       }
-
       changes.forEach(c => {
         if (c.type === FileChangeType.Changed) {
           const fsPath = Uri.parse(c.uri).fsPath;
@@ -233,18 +232,17 @@ export class VLS {
    * Language Features
    */
 
-  onDocumentFormatting({ textDocument, options }: DocumentFormattingParams): TextEdit[] {
+  async onDocumentFormatting({ textDocument, options }: DocumentFormattingParams): Promise<TextEdit[]> {
     const doc = this.documentService.getDocument(textDocument.uri)!;
 
     const modeRanges = this.languageModes.getAllLanguageModeRangesInDocument(doc);
     const allEdits: TextEdit[] = [];
 
     const errMessages: string[] = [];
-
-    modeRanges.forEach(modeRange => {
+    for (const modeRange of modeRanges) {
       if (modeRange.mode && modeRange.mode.format) {
         try {
-          const edits = modeRange.mode.format(doc, this.toSimpleRange(modeRange), options);
+          const edits = await modeRange.mode.format(doc, this.toSimpleRange(modeRange), options);
           for (const edit of edits) {
             allEdits.push(edit);
           }
@@ -252,7 +250,7 @@ export class VLS {
           errMessages.push(err.toString());
         }
       }
-    });
+    }
 
     if (errMessages.length !== 0) {
       this.displayErrorMessage('Formatting failed: "' + errMessages.join('\n') + '"');

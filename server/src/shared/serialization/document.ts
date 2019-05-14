@@ -7,15 +7,21 @@ import { F64 } from './f64';
 import { Serializer } from '../decorators/serializer';
 
 export const Document = {
-  parse: (value: Reader) => {},
+  parse: (value: Reader) => { },
   stringify: (value: TextDocument) => {
     return '';
   }
 } as ISerializer<TextDocument>;
 
 @Move()
-export class Doc extends Serializer {
+export class DocWithText extends Serializer {
   @Move(Thru) fileName: string;
   @Move(F64) shift: number;
   @Move(F64) size: number;
 }
+
+@Move()
+export class Doc extends Serializer {
+  @Move(Thru) fileName: string;
+}
+
