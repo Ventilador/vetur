@@ -2,7 +2,8 @@
   "extends": "../tsconfig.options.json",
   "compilerOptions": {
     "composite": true,
-    "outDir": "./dist",
+    "outDir": "./../dist/server-side",
+    "rootDir": "./src",
     "experimentalDecorators": true,
     "lib": [
       "es2015",
@@ -12,7 +13,7 @@
     "strictPropertyInitialization": false
   },
   "include": [
-    "src"
+    "src/**/*.ts"
   ],
   "exclude": ["node_modules"]
 }

@@ -25,7 +25,7 @@ export function ArrayOf<T>(serializer: ISerializer<T>): ISerializer<T[]> {
          * since all sizes are known, there is no need to the last pipe (join only adds pipes between items not first nor last)
          * there is no need for separators between values either
          */
-      }${preparedValues.join('')}`;
+      }|${preparedValues.join('')}`;
     }
   });
 }

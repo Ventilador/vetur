@@ -1,16 +1,30 @@
 import { Socket } from 'net';
 import { fromBuffer, toBuffer } from './parser';
-import { JoinMessages } from './joinMessages';
+import { messageJoiner } from './joinMessages';
 import { SocketMessage, MessageType } from './serialization/socketMessage';
 import { Diagnostic, TextEdit } from 'vscode-languageserver-types';
 import { Method, IMetadataItem, Argument } from './decorators/reviver';
 import { FullJson } from './serialization/json';
-import { TextDocument, CompletionList, CompletionItem, Hover, SignatureHelp, DocumentHighlight, SymbolInformation, Definition, Location, CodeActionContext, Command, Range, FormattingOptions, Position } from 'vscode-languageserver';
+import {
+  TextDocument,
+  CompletionList,
+  CompletionItem,
+  Hover,
+  SignatureHelp,
+  DocumentHighlight,
+  SymbolInformation,
+  Definition,
+  Location,
+  CodeActionContext,
+  Command,
+  Range,
+  FormattingOptions,
+  Position
+} from 'vscode-languageserver';
 import { Doc, DocWithText } from './serialization/document';
 import { RefactorAction } from '../server/types';
 import { Thru } from './serialization/thru';
 import { ArrayOf } from './serialization/arrayOf';
-
 
 export abstract class AsyncLanguageService {
   public static METADATA: IMetadataItem[] = [];
@@ -24,25 +38,16 @@ export abstract class AsyncLanguageService {
   public abstract dispose(): void;
   protected abstract initWrapper(metadata: IMetadataItem): Function;
 
-
-  @Method() updateDocument(
-    @Argument(DocWithText) doc: TextDocument
-  ): Promise<void> | void {
+  @Method() updateDocument(@Argument(DocWithText) doc: TextDocument): Promise<void> | void {
     throw new Error('Not implemented');
   }
-  @Method() configure(
-    @Argument(FullJson) c: any
-  ): Promise<void> | void {
+  @Method() configure(@Argument(FullJson) c: any): Promise<void> | void {
     throw new Error('Not implemented');
   }
-  @Method() updateFileInfo(
-    @Argument(Doc) doc: TextDocument
-  ): Promise<void> | void {
+  @Method() updateFileInfo(@Argument(Doc) doc: TextDocument): Promise<void> | void {
     throw new Error('Not implemented');
   }
-  @Method(ArrayOf(FullJson)) doValidation(
-    @Argument(Doc) doc: TextDocument
-  ): Promise<Diagnostic[]> | Diagnostic[] {
+  @Method(ArrayOf(FullJson)) doValidation(@Argument(Doc) doc: TextDocument): Promise<Diagnostic[]> | Diagnostic[] {
     throw new Error('Not implemented');
   }
   @Method(FullJson) doComplete(
@@ -121,12 +126,11 @@ export abstract class AsyncLanguageService {
   }
 }
 
-
 export class MessageConnector {
   private _channel: Channel;
   private events: Record<string, Function> = Object.create(null);
   constructor(private _socket: Socket, private _onError: (err: any) => any) {
-    _socket.pipe(new JoinMessages()).on('data', onData);
+    messageJoiner(_socket, onData);
     function onData(data: Buffer) {
       dispatchData(fromBuffer<SocketMessage>(data, SocketMessage));
     }
@@ -134,7 +138,7 @@ export class MessageConnector {
     const events = this.events;
     function dispatchData(value: SocketMessage) {
       if (value.type === MessageType.Response) {
-        const id = +value.args.shift()!;
+        const id = value.id;
         if (isNaN(id)) {
           _onError(new Error('Invalid id response'));
           return;
@@ -161,34 +165,38 @@ export class MessageConnector {
 
     function handleRequest(value: SocketMessage) {
       if (events[value.action]) {
-        events[value.action].apply(null, value.args)
-          .then((result: any) => {
-            _socket.write(toBuffer<SocketMessage>(
-              {
-                type: MessageType.Response,
-                action: value.action,
-                args: [null, result],
-                id: value.id
-              },
-              SocketMessage
-            ))
-          }, (result: any) => _socket.write(toBuffer<SocketMessage>(
-            {
-              type: MessageType.Response,
-              action: value.action,
-              args: [result, null],
-              id: value.id
-            },
-            SocketMessage
-          ))
-          );
+        events[value.action].apply(null, value.args).then(
+          (result: any) => {
+            _socket.write(
+              toBuffer<SocketMessage>(
+                {
+                  type: MessageType.Response,
+                  action: value.action,
+                  args: [null, result],
+                  id: value.id
+                },
+                SocketMessage
+              )
+            );
+          },
+          (result: any) =>
+            _socket.write(
+              toBuffer<SocketMessage>(
+                {
+                  type: MessageType.Response,
+                  action: value.action,
+                  args: [result, null],
+                  id: value.id
+                },
+                SocketMessage
+              )
+            )
+        );
       }
     }
   }
 
-  request<T>(
-    action: string, args: any[] = []
-  ): Promise<T> {
+  request<T>(action: string, ...args: any[]): Promise<T> {
     return new Promise((res, rej) => {
       const id = this._channel.put((err, result) => {
         if (err) {
@@ -212,7 +220,7 @@ export class MessageConnector {
   }
 
   onRequest(name: string, fn: Function) {
-    this.events[name] = function () {
+    this.events[name] = function() {
       try {
         const result = fn.apply(null, arguments);
         if (result && result.then) {
@@ -223,16 +231,14 @@ export class MessageConnector {
       } catch (err) {
         Promise.reject(err);
       }
-    }
+    };
   }
 
   dispose() {
     this._socket.end();
   }
 
-  private handleRequest() {
-
-  }
+  private handleRequest() {}
 }
 
 class Channel {
@@ -242,7 +248,7 @@ class Channel {
   put(cb: (err: Error, result?: any) => any) {
     const id = this.available.length ? this.available.pop()! : this.len++;
     const self = this;
-    this.channels[id] = function () {
+    this.channels[id] = function() {
       self.channels[id] = undefined;
       self.available.push(id);
       return cb.apply(this, arguments as any);

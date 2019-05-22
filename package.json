@@ -9,6 +9,7 @@
   "scripts": {
     "build:grammar": "tsc -p . && node dist/scripts/build_grammar",
     "compile": "tsc -b .",
+    "prewatch": "node scripts/copyPaths server/node_modules dist/server-side/node_modules",
     "watch": "tsc -b -w .",
     "lint": "tslint -c tslint.json client/**/*.ts server/src/**/*.ts server/vetur-tsserver-plugin/**/*.ts scripts/**/*.ts",
     "test:server": "npm run compile && cd server && npm test",
@@ -67,10 +68,7 @@
     "typescriptServerPlugins": [
       {
         "name": "../dist/server-side/vetur-tsserver-plugin/index.js",
-        "extensionPath": "dist/server-side/vetur-tsserver-plugin/index.js",
-        "languages": [
-          "vetur"
-        ]
+        "extensionPath": "dist/server-side/vetur-tsserver-plugin/index.js"
       }
     ],
     "commands": [

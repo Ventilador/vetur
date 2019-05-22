@@ -3,26 +3,43 @@ import { Thru } from '../serialization/thru';
 import { ISerializer } from '../serialization/types';
 const transformations = 'a';
 const originalFn = 'b';
-const cache: Record<'parse' | 'stringify', Record<number, (orig: Function, transformers: any) => Function>> = {
+const cache: Record<
+  'parse' | 'stringify',
+  Record<number, (orig: Function, transformers: ISerializer<any>[]) => Function>
+> = {
   parse: {},
   stringify: {}
 };
 const argMap = Symbol('argMap');
-const Base: any = function (amount: number) {
-  while (baseProto.length <= amount) {
-    baseProto[baseProto.length++] = Thru;
+
+class Base {
+  [key: number]: ISerializer<any>;
+  readonly length: number = 0;
+  readonly size: number;
+  add(index: number, value: ISerializer<any>) {
+    if (this.length < index + 1) {
+      while (Base.prototype.size <= index) {
+        Base.prototype[(Base.prototype as { size: number }).size++] = Thru;
+      }
+      (this as { length: number }).length = index + 1;
+    }
+    this[index] = value;
+  }
+}
+
+(Base.prototype as { size: number }).size = 0;
+
+const voidSerializer = {
+  parse() {},
+  stringify() {
+    return '';
   }
 };
-const voidSerializer = {
-  parse() { },
-  stringify() { return ''; }
-}
-const baseProto = (Base.prototype = Object.create(null));
-baseProto.length = 0;
+
 export function Method(ctor?: ISerializer<any>) {
   return function Method(proto: any, name: string) {
     const items: IMetadataItem[] = proto.constructor.METADATA;
-    if(!proto[name][argMap]){
+    if (!proto[name][argMap]) {
       throw 'Serializers not found';
     }
     items.push({
@@ -33,25 +50,24 @@ export function Method(ctor?: ISerializer<any>) {
   };
 }
 
-
 export interface IMetadataItem {
-  name: string,
-  transforms: ISerializer<any>[],
-  returns: ISerializer<any>
+  name: string;
+  transforms: ISerializer<any>[];
+  returns: ISerializer<any>;
 }
 
 export function Argument<T>(ctor: ISerializer<T>) {
-  return function (proto: any, name: string, index: number) {
-    if (!proto[name][argMap]) {
-      proto[name][argMap] = new Base(index);
+  return function(proto: { [name: string]: { [key: string]: Base } }, name: string, index: number) {
+    if (!proto[name][argMap as any]) {
+      proto[name][argMap as any] = new Base();
     }
 
-    proto[name][argMap][index] = ctor;
+    proto[name][argMap as any].add(index, ctor);
   };
 }
 
-export function argWrapper(transformers: any, original: Function, mode: 'parse' | 'stringify') {
-  const size = original.length;
+export function argWrapper(transformers: ISerializer<any>[], original: Function, mode: 'parse' | 'stringify') {
+  const size = transformers.length;
   if (!cache[mode][size]) {
     cache[mode][size] = createByMode(size, mode);
   }
@@ -72,7 +88,10 @@ export function argWrapper(transformers: any, original: Function, mode: 'parse' 
  * }
  * var temp; // used to cache some accessors
  */
-function createByMode(size: number, mode: 'parse' | 'stringify'): (originalFn: Function, transform: any) => Function {
+function createByMode(
+  size: number,
+  mode: 'parse' | 'stringify'
+): (originalFn: Function, transform: ISerializer<any>[]) => Function {
   return new Function(
     originalFn,
     transformations,

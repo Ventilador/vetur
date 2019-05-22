@@ -21,14 +21,29 @@ function move(from, to) {
   return Promise.all([stat(from), stat(to).catch(noop)]).then(([statFrom, statTo]) => {
     if (statFrom.isDirectory()) {
       if (!statTo) {
-        return mkdir(to).then(() => copyDirectory(from, to));
+        return ensureDir(to).then(() => copyDirectory(from, to));
       }
       return copyDirectory(from, to);
     } else {
-      return copyFile(from, to);
+      copyFile(from, to);
     }
   });
 }
+
+function ensureDir(to) {
+  return mkdir(to).catch(err => {
+    if (err.code === 'ENOENT') {
+      return ensureDir(path.dirname(to)).then(() => ensureDir(to));
+    }
+
+    if (err.code === 'EEXIST') {
+      return;
+    }
+    console.error(err);
+    throw err;
+  });
+}
+
 function noop() {}
 
 function copyDirectory(from, to) {
@@ -60,15 +75,11 @@ function createFileQueue() {
     if (errored) {
       return;
     }
-    if (running === 20) {
-      queue.push([from, to]);
-      return;
+    if (from.indexOf('node_modules') !== -1) {
+      _handleNodeModules(from, to);
+    } else {
+      _copyFile(from, to);
     }
-    running++;
-    createReadStream(from)
-      .pipe(createWriteStream(to))
-      .on('close', onClose)
-      .on('error', onError);
   }
   function onError(err) {
     if (errored) {
@@ -87,5 +98,21 @@ function createFileQueue() {
     } else if (!running && flushed) {
       resolve();
     }
+  }
+
+  function _copyFile(from, to) {
+    if (running === 20) {
+      queue.push([from, to]);
+      return;
+    }
+    running++;
+    createReadStream(from)
+      .pipe(createWriteStream(to))
+      .on('close', onClose)
+      .on('error', onError);
+  }
+
+  function _handleNodeModules(from, to) {
+    return stat(to).catch(() => _copyFile(from, to));
   }
 }

@@ -1,15 +1,40 @@
 import { Socket } from 'net';
 import { MessageConnector, AsyncLanguageService } from '../shared/classes';
-import { displayPartsToString, flattenDiagnosticMessageText, getSupportedCodeFixes, server, ScriptKind } from 'typescript/lib/tsserverlibrary';
+import {
+  displayPartsToString,
+  flattenDiagnosticMessageText,
+  getSupportedCodeFixes,
+  server,
+  ScriptKind
+} from 'typescript/lib/tsserverlibrary';
 import { ServerHost } from './serverHost';
 import {
-  TextDocument, Diagnostic, DiagnosticTag, Range, DiagnosticSeverity,
-  Position, CompletionList, TextEdit, CompletionItemKind, CompletionItem,
-  MarkupContent, Hover, MarkedString, SignatureHelp, SignatureInformation,
-  ParameterInformation, DocumentHighlight, DocumentHighlightKind, SymbolInformation,
-  Definition, Location, FormattingOptions, CodeActionContext, Command, SymbolKind
+  TextDocument,
+  Diagnostic,
+  DiagnosticTag,
+  Range,
+  DiagnosticSeverity,
+  Position,
+  CompletionList,
+  TextEdit,
+  CompletionItemKind,
+  CompletionItem,
+  MarkupContent,
+  Hover,
+  MarkedString,
+  SignatureHelp,
+  SignatureInformation,
+  ParameterInformation,
+  DocumentHighlight,
+  DocumentHighlightKind,
+  SymbolInformation,
+  Definition,
+  Location,
+  FormattingOptions,
+  CodeActionContext,
+  Command,
+  SymbolKind
 } from 'vscode-languageserver';
-import { Uri } from 'vscode';
 import { IMetadataItem, argWrapper } from '../shared/decorators/reviver';
 import { getFileFsPath } from '../server/utils/paths';
 import { LanguageModelCache } from '../server/embeddedSupport/languageModelCache';
@@ -18,7 +43,6 @@ import { NULL_SIGNATURE } from '../server/modes/nullMode';
 import { RefactorAction } from '../server/types';
 import { VLSFormatConfig } from '../server/config';
 import { prettierify, prettierEslintify } from '../server/utils/prettier';
-
 
 let supportedCodeFixCodes: Set<any> | undefined;
 // Todo: After upgrading to LS server 4.0, use CompletionContext for filtering trigger chars
@@ -35,9 +59,9 @@ export class Handler extends AsyncLanguageService {
     private _host: ServerHost
   ) {
     super(_socket, console.error);
-    AsyncLanguageService.METADATA.forEach((m) => {
+    AsyncLanguageService.METADATA.forEach(m => {
       this.bus$.onRequest(m.name, (this as any)[m.name]);
-    })
+    });
   }
 
   public dispose(): void {
@@ -46,9 +70,13 @@ export class Handler extends AsyncLanguageService {
   protected initWrapper(metadata: IMetadataItem): Function {
     const self = this;
     const method = (this as any)[metadata.name] as Function;
-    return argWrapper(metadata.transforms, function () {
-      return metadata.returns.stringify(method.apply(self, arguments));
-    }, 'parse');
+    return argWrapper(
+      metadata.transforms,
+      function() {
+        return metadata.returns.stringify(method.apply(self, arguments));
+      },
+      'parse'
+    );
   }
 
   public updateDocument(file: TextDocument) {
@@ -67,7 +95,7 @@ export class Handler extends AsyncLanguageService {
   public configure(c: any) {
     this.config = c;
   }
-  public updateFileInfo(): void { }
+  public updateFileInfo(): void {}
   public doValidation(doc: TextDocument): Diagnostic[] {
     if (!shouldProcess(doc.uri)) {
       return [];
@@ -319,7 +347,7 @@ export class Handler extends AsyncLanguageService {
     definitions.forEach(d => {
       const definitionTargetDoc = getSourceDoc(d.fileName, program);
       definitionResults.push({
-        uri: Uri.file(d.fileName).toString(),
+        uri: d.fileName,
         range: convertRange(definitionTargetDoc, d.textSpan)
       });
     });
@@ -345,7 +373,7 @@ export class Handler extends AsyncLanguageService {
       const referenceTargetDoc = getSourceDoc(r.fileName, program);
       if (referenceTargetDoc) {
         referenceResults.push({
-          uri: Uri.file(r.fileName).toString(),
+          uri: r.fileName,
           range: convertRange(referenceTargetDoc, r.textSpan)
         });
       }
@@ -404,7 +432,6 @@ export class Handler extends AsyncLanguageService {
     return createApplyCodeActionCommand('', uriMapping);
   }
   format(doc: TextDocument, range: Range, formatParams: FormattingOptions): TextEdit[] {
-
     const defaultFormatter =
       doc.languageId === 'javascript'
         ? this.config.vetur.format.defaultFormatter.js
@@ -458,10 +485,9 @@ export class Handler extends AsyncLanguageService {
       return result;
     }
   }
-  onDocumentRemoved(_document: TextDocument) { }
-  onDocumentChanged(_filePath: string) { }
+  onDocumentRemoved(_document: TextDocument) {}
+  onDocumentChanged(_filePath: string) {}
 }
-
 
 function convertOptions(
   formatSettings: ts.FormatCodeSettings,
@@ -475,7 +501,6 @@ function convertOptions(
     baseIndentSize: options.tabSize * initialIndentLevel
   });
 }
-
 
 function convertCodeAction(
   doc: TextDocument,
@@ -511,7 +536,6 @@ function convertCodeAction(
   return textEdits;
 }
 
-
 function convertKind(kind: ts.ScriptElementKind): CompletionItemKind {
   switch (kind) {
     case 'primitive type':
@@ -544,7 +568,6 @@ function convertKind(kind: ts.ScriptElementKind): CompletionItemKind {
 
   return CompletionItemKind.Property;
 }
-
 
 function getFormatCodeSettings(config: any): ts.FormatCodeSettings {
   return {
@@ -596,8 +619,6 @@ function getSourceDoc(fileName: string, program: ts.Program): TextDocument {
   return TextDocument.create(fileName, 'vue', 0, sourceFile.getFullText());
 }
 
-
-
 function createUriMappingForEdits(changes: ts.FileTextChanges[], service: ts.LanguageService) {
   const program = service.getProgram()!;
   const result: Record<string, TextEdit[]> = {};
@@ -607,7 +628,7 @@ function createUriMappingForEdits(changes: ts.FileTextChanges[], service: ts.Lan
       newText,
       range: convertRange(targetDoc, span)
     }));
-    const uri = Uri.file(fileName).toString();
+    const uri = fileName;
     if (result[uri]) {
       result[uri].push(...edits);
     } else {
@@ -616,7 +637,6 @@ function createUriMappingForEdits(changes: ts.FileTextChanges[], service: ts.Lan
   }
   return result;
 }
-
 
 function createApplyCodeActionCommand(title: string, uriTextEditMapping: Record<string, TextEdit[]>): Command {
   return {
@@ -639,7 +659,6 @@ function collectQuickFixCommands(
     result.push(createApplyCodeActionCommand(fix.description, uriTextEditMapping));
   }
 }
-
 
 function collectRefactoringCommands(
   refactorings: ts.ApplicableRefactorInfo[],

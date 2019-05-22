@@ -3,10 +3,13 @@ import { listen } from './server';
 import { startLanguageService } from './fileHandler';
 import { Socket } from 'net';
 const VETUR_PORT = process.env.VETUR_PORT ? +process.env.VETUR_PORT : 64278;
+debugger;
 function init({ typescript: ts }: { typescript: typeof ts_module }) {
+  debugger;
   return { create };
 
   function create(info: ts.server.PluginCreateInfo) {
+    debugger;
     // Diagnostic logging
     info.project.projectService.logger.info("I'm getting set up now! Check the log for this message.");
     const serverHost = info.serverHost;

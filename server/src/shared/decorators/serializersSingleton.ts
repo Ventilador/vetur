@@ -5,6 +5,7 @@ export function getToken(serializer: ISerializer<any>): string {
     return cache.get(serializer)!;
   }
   const token = nextToken();
+  AllConstructors[token] = serializer;
   cache.set(serializer, token);
   return token;
 }

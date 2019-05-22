@@ -1,11 +1,13 @@
 import { ISerializer } from '../serialization/types';
 import { Reader } from '../parser';
 import { getToken, AllConstructors } from './serializersSingleton';
+import { Serializer } from './serializer';
 
 const AllConstructorsVar = 'a';
 const readerArg = 'b';
 const valueArg = 'c';
 const stringifyFn = 'd';
+const parseFn = 'e';
 const keys = Symbol('isReady');
 export function Move(): (proto: any) => any;
 export function Move(ctor: ISerializer<any>): (proto: any, name: string) => void;
@@ -33,20 +35,28 @@ interface IItem {
 function createParser(props: IItem[]) {
   return new Function(
     AllConstructorsVar,
+    parseFn,
     `
 return function(${readerArg}){
     return {
         ${props
-      .map((prop, i) => {
-        return `${prop.name}: ${AllConstructorsVar}.${getToken(prop.ctor)}.parse(${readerArg}.sliceNext(${readerArg}.collectNumber()))`;
-      })
-      .join(',\r\n\t\t')}
+          .map((prop, i) => {
+            return `${prop.name}: ${parseFn}(${AllConstructorsVar}.${getToken(prop.ctor)}, ${readerArg})`;
+          })
+          .join(',\r\n\t\t')}
     };
 }`
-  )(AllConstructors) as (val: Reader) => any;
+  )(AllConstructors, parseHelper) as (val: Reader) => any;
+}
+
+function parseHelper<T>(serializer: ISerializer<T>, reader: Reader): T {
+  return serializer.parse(reader.slice(reader.collectNumber()));
 }
 
 function stringifyHelper<T>(serializer: ISerializer<T>, val: T) {
+  if (typeof serializer === 'function') {
+    val = new (serializer as any)(val);
+  }
   const valText = serializer.stringify(val);
   return `${valText.length}|${valText}`;
 }

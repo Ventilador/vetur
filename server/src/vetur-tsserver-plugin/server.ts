@@ -4,5 +4,5 @@ export function listen(port: number, onConnection: (val: Socket) => any, onError
     onConnection(socket);
   })
     .on('error', onError)
-    .listen(port, '127.0.0.1');
+    .listen(port);
 }

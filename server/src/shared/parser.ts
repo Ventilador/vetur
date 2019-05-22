@@ -12,7 +12,7 @@ export function fromBuffer<T>(buffer: Buffer, serializer: ISerializer<T>): T {
 }
 
 export class Reader {
-  private static Empty: Reader = {
+  public static readonly Empty: Reader = {
     toString: valueFn(''),
     slice: () => Reader.Empty,
     collect: valueFn([]),
@@ -35,8 +35,8 @@ export class Reader {
     if (!amount) {
       return Reader.Empty;
     }
-    if (this.index + amount < this.text.length) {
-      const other = new Reader(this.text, this.index, amount);
+    if (this.index + amount <= this.size) {
+      const other = new Reader(this.text, this.index, this.index + amount);
       this.index += amount;
       return other;
     }
@@ -46,7 +46,7 @@ export class Reader {
   collect(amount: number): number[] {
     const arr = new Array(amount);
     for (let i = 0; i < amount; i++) {
-      arr.push(this.collectNumber());
+      arr[i] = this.collectNumber();
     }
     return arr;
   }
@@ -54,7 +54,7 @@ export class Reader {
   collectNumber(): number {
     let collected = '';
     const text = this.text;
-    const l = text.length;
+    const l = this.size;
     for (let i = this.index; i < l; i++) {
       if (isNumber(text[i])) {
         collected += text[i];
@@ -68,7 +68,7 @@ export class Reader {
   }
 
   hasMore() {
-    return this.index < this.text.length;
+    return this.index < this.size;
   }
 }
 
